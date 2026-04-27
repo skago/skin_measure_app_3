@@ -1,0 +1,4 @@
+{
+  "desc": "关于本项目的功能说明",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

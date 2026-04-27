@@ -1,0 +1,183 @@
+.page {
+  min-height: 100vh;
+  background: #f8f8f8;
+  padding: 32rpx;
+}
+
+.step-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.step-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 16rpx;
+  align-self: flex-start;
+}
+
+.guide-text {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 32rpx;
+  text-align: center;
+  line-height: 1.6;
+  align-self: flex-start;
+}
+
+.upload-area {
+  width: 100%;
+  min-height: 400rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  border: 2rpx dashed #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32rpx;
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.upload-icon {
+  font-size: 80rpx;
+  margin-bottom: 16rpx;
+}
+
+.upload-text {
+  font-size: 28rpx;
+  color: #999;
+}
+
+.preview-img {
+  width: 100%;
+  border-radius: 12rpx;
+}
+
+.canvas-container {
+  width: 100%;
+  margin-bottom: 24rpx;
+}
+
+.canvas {
+  width: 100%;
+  height: 500rpx;
+  background: #fff;
+  border-radius: 12rpx;
+}
+
+.calibration-info {
+  font-size: 26rpx;
+  color: #3b82f6;
+  margin-bottom: 16rpx;
+  align-self: flex-start;
+}
+
+.polygon-info {
+  font-size: 26rpx;
+  color: #3b82f6;
+  margin-bottom: 16rpx;
+  align-self: flex-start;
+}
+
+.btn-row {
+  display: flex;
+  gap: 24rpx;
+  width: 100%;
+  margin-bottom: 24rpx;
+  justify-content: center;
+}
+
+.btn-next {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  padding: 28rpx;
+  width: 100%;
+  margin-bottom: 24rpx;
+}
+
+.btn-retry, .btn-undo, .btn-reset {
+  background: #fff;
+  color: #666;
+  border: 2rpx solid #ddd;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  padding: 20rpx 40rpx;
+}
+
+.btn-save {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  padding: 28rpx;
+  width: 100%;
+  margin-bottom: 24rpx;
+}
+
+.btn-share {
+  background: #fff;
+  color: #3b82f6;
+  border: 2rpx solid #3b82f6;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  padding: 28rpx;
+  width: 100%;
+  margin-bottom: 24rpx;
+}
+
+.btn-rematch {
+  background: #fff;
+  color: #999;
+  border: 2rpx solid #ddd;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  padding: 28rpx;
+  width: 100%;
+}
+
+.result-card {
+  width: 100%;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 48rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 32rpx;
+}
+
+.result-label {
+  font-size: 28rpx;
+  color: #999;
+  margin-bottom: 12rpx;
+}
+
+.result-value {
+  font-size: 72rpx;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.result-meta {
+  font-size: 26rpx;
+  color: #999;
+  margin-bottom: 32rpx;
+  align-self: flex-start;
+}
+
+.result-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}

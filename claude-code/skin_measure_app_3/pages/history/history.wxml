@@ -1,0 +1,19 @@
+<view class="page">
+  <text class="page-title">历史记录</text>
+
+  <view wx:if="{{records.length === 0}}" class="empty">
+    <text class="empty-icon">📋</text>
+    <text class="empty-text">暂无记录</text>
+    <button class="btn-go" bindtap="goMeasure">去测量</button>
+  </view>
+
+  <view wx:else class="record-list">
+    <view wx:for="{{records}}" wx:key="id" class="record-card" bindtap="viewDetail" data-id="{{item.id}}">
+      <view class="record-info">
+        <text class="record-area">{{item.areaCm2}} cm²</text>
+        <text class="record-time">{{item.createdAtStr}}</text>
+      </view>
+      <view class="record-meta">顶点数：{{item.vertexCount}}</view>
+    </view>
+  </view>
+</view>

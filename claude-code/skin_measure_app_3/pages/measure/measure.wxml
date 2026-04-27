@@ -1,0 +1,64 @@
+<view class="page">
+  <!-- Step 1: 上传图片 -->
+  <view wx:if="{{step === 1}}" class="step-container">
+    <text class="step-title">Step 1 / 4：上传图片</text>
+    <text class="guide-text">请拍摄包含比例尺的患处照片，比例尺需平行放置于画面内</text>
+    <view class="upload-area" bindtap="chooseImage">
+      <image wx:if="{{imagePath}}" src="{{imagePath}}" mode="widthFix" class="preview-img" />
+      <view wx:else class="upload-placeholder">
+        <text class="upload-icon">📷</text>
+        <text class="upload-text">点击拍照或选择图片</text>
+      </view>
+    </view>
+    <button wx:if="{{imagePath}}" class="btn-next" bindtap="confirmImage">确认图片</button>
+  </view>
+
+  <!-- Step 2: 标定比例尺 -->
+  <view wx:if="{{step === 2}}" class="step-container">
+    <text class="step-title">Step 2 / 4：标定比例尺</text>
+    <text class="guide-text">请点击比例尺上 {{calibrationTarget}} 刻度</text>
+    <view class="canvas-container">
+      <canvas type="2d" id="calibrationCanvas" class="canvas" bindtap="onCalibrationTap"></canvas>
+    </view>
+    <view class="calibration-info" wx:if="{{pxPerMm}}">
+      <text>换算系数：1px = {{mmPerPxStr}} mm</text>
+    </view>
+    <button wx:if="{{calibrationDone}}" class="btn-next" bindtap="confirmCalibration">确认标定</button>
+    <button wx:if="{{calibrationDone}}" class="btn-retry" bindtap="resetCalibration">重新标定</button>
+  </view>
+
+  <!-- Step 3: 描画病变区域 -->
+  <view wx:if="{{step === 3}}" class="step-container">
+    <text class="step-title">Step 3 / 4：描画病变区域</text>
+    <text class="guide-text">点击图中病变区域轮廓顶点（至少3点）</text>
+    <view class="canvas-container">
+      <canvas type="2d" id="polygonCanvas" class="canvas" bindtap="onPolygonTap"></canvas>
+    </view>
+    <view class="polygon-info">
+      <text wx:if="{{vertices.length > 0}}">已选点：{{vertices.length}} 个</text>
+      <text wx:if="{{previewArea}}"> 预览面积：{{previewArea}} cm²</text>
+    </view>
+    <view class="btn-row">
+      <button wx:if="{{vertices.length > 0}}" class="btn-undo" bindtap="undoVertex">撤销</button>
+      <button wx:if="{{vertices.length > 0}}" class="btn-reset" bindtap="resetPolygon">重置</button>
+    </view>
+    <button wx:if="{{vertices.length >= 3}}" class="btn-next" bindtap="confirmPolygon">完成描画</button>
+  </view>
+
+  <!-- Step 4: 结果展示 -->
+  <view wx:if="{{step === 4}}" class="step-container">
+    <text class="step-title">Step 4 / 4：测量结果</text>
+    <view class="result-card">
+      <text class="result-label">病变面积</text>
+      <text class="result-value">{{resultArea}} cm²</text>
+    </view>
+    <view class="result-meta">
+      <text>测量时间：{{measureTime}}</text>
+    </view>
+    <view class="result-actions">
+      <button class="btn-save" bindtap="saveRecord">保存记录</button>
+      <button class="btn-share" bindtap="shareResult">分享结果</button>
+      <button class="btn-rematch" bindtap="reMeasure">重新测量</button>
+    </view>
+  </view>
+</view>
