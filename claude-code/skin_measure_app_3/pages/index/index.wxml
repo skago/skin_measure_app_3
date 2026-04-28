@@ -1,6 +1,6 @@
 <view class="container">
   <view class="header">
-    <image class="icon" src="/images/logo.png" mode="aspectFit" />
+    <view class="icon-placeholder">📏</view>
     <text class="title">皮肤面积测量</text>
     <text class="subtitle">简单 · 规范 · 可复现</text>
   </view>

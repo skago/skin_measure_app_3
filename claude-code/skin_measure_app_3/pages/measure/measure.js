@@ -17,7 +17,6 @@ Page({
     savedRecordId: ''
   },
 
-  // Step 1: 选择图片
   chooseImage() {
     wx.chooseMedia({
       count: 1,
@@ -31,14 +30,21 @@ Page({
             this.setData({
               imagePath: tempFilePath,
               imageWidth: info.width,
-              imageHeight: info.height,
-              step: 2
+              imageHeight: info.height
             });
-            this.initCalibrationCanvas();
           }
         });
       }
     });
+  },
+
+  confirmImage() {
+    if (!this.data.imagePath) {
+      wx.showToast({ title: '请先选择图片', icon: 'none' });
+      return;
+    }
+    this.setData({ step: 2 });
+    this.initCalibrationCanvas();
   },
 
   // Step 2: 初始化比例尺标定画布
@@ -69,6 +75,9 @@ Page({
           const offsetY = (canvasH - drawH) / 2;
           this.canvasData = { canvas, ctx, dpr, drawW, drawH, offsetX, offsetY, scale };
           ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+        };
+        img.onerror = () => {
+          wx.showToast({ title: '图片加载失败', icon: 'none' });
         };
       });
   },
@@ -176,6 +185,9 @@ Page({
           const offsetY = (canvasH - drawH) / 2;
           this.polyData = { canvas, ctx, dpr, drawW, drawH, offsetX, offsetY, scale };
           this.redrawPolygon();
+        };
+        img.onerror = () => {
+          wx.showToast({ title: '图片加载失败', icon: 'none' });
         };
       });
   },

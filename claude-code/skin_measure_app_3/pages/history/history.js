@@ -18,6 +18,11 @@ Page({
 
   viewDetail(e) {
     const { id } = e.currentTarget.dataset;
+    const record = this.data.records.find(r => r.id === id);
+    if (!record) {
+      wx.showToast({ title: '记录不存在', icon: 'none' });
+      return;
+    }
     wx.showModal({
       title: '操作',
       content: '选择操作',
@@ -27,7 +32,6 @@ Page({
         if (res.cancel) {
           this.deleteRecord(id);
         } else {
-          const record = this.data.records.find(r => r.id === id);
           wx.showModal({
             title: '测量详情',
             content: `面积：${record.areaCm2} cm²\n顶点数：${record.vertexCount}\n测量时间：${record.createdAtStr}`,

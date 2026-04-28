@@ -15,6 +15,11 @@
   margin-top: 40rpx;
 }
 
+.icon-placeholder {
+  font-size: 80rpx;
+  margin-bottom: 20rpx;
+}
+
 .icon {
   width: 120rpx;
   height: 120rpx;
