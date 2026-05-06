@@ -17,22 +17,44 @@
   <view wx:if="{{step === 2}}" class="step-container">
     <text class="step-title">Step 2 / 4：标定比例尺</text>
     <text class="guide-text">请点击比例尺上 {{calibrationTarget}} 刻度</text>
-    <view class="canvas-container">
-      <canvas type="2d" id="calibrationCanvas" class="canvas" bindtap="onCalibrationTap"></canvas>
+    <view class="guide-tip">双指可缩放图片，单指可拖动</view>
+    <view class="canvas-wrapper">
+      <canvas type="2d" id="calibrationCanvas" class="canvas"
+        bindtouchstart="onCalibrationTouchStart"
+        bindtouchmove="onCalibrationTouchMove"
+        bindtouchend="onCalibrationTouchEnd"
+        bindtap="onCalibrationTap"></canvas>
+    </view>
+    <view class="zoom-controls">
+      <button class="zoom-btn" bindtap="zoomOutCalibration">−</button>
+      <text class="zoom-scale">{{Math.round(calibrationScale * 100)}}%</text>
+      <button class="zoom-btn" bindtap="zoomInCalibration">+</button>
     </view>
     <view class="calibration-info" wx:if="{{pxPerMm}}">
       <text>换算系数：1px = {{mmPerPxStr}} mm</text>
     </view>
-    <button wx:if="{{calibrationDone}}" class="btn-next" bindtap="confirmCalibration">确认标定</button>
-    <button wx:if="{{calibrationDone}}" class="btn-retry" bindtap="resetCalibration">重新标定</button>
+    <view class="btn-row">
+      <button wx:if="{{calibrationDone}}" class="btn-retry" bindtap="resetCalibration">重新标定</button>
+      <button wx:if="{{calibrationDone}}" class="btn-next" bindtap="confirmCalibration">确认标定</button>
+    </view>
   </view>
 
   <!-- Step 3: 描画病变区域 -->
   <view wx:if="{{step === 3}}" class="step-container">
     <text class="step-title">Step 3 / 4：描画病变区域</text>
     <text class="guide-text">点击图中病变区域轮廓顶点（至少3点）</text>
-    <view class="canvas-container">
-      <canvas type="2d" id="polygonCanvas" class="canvas" bindtap="onPolygonTap"></canvas>
+    <view class="guide-tip">双指可缩放图片，单指可拖动</view>
+    <view class="canvas-wrapper">
+      <canvas type="2d" id="polygonCanvas" class="canvas"
+        bindtouchstart="onPolygonTouchStart"
+        bindtouchmove="onPolygonTouchMove"
+        bindtouchend="onPolygonTouchEnd"
+        bindtap="onPolygonTap"></canvas>
+    </view>
+    <view class="zoom-controls">
+      <button class="zoom-btn" bindtap="zoomOutPolygon">−</button>
+      <text class="zoom-scale">{{Math.round(polygonScale * 100)}}%</text>
+      <button class="zoom-btn" bindtap="zoomInPolygon">+</button>
     </view>
     <view class="polygon-info">
       <text wx:if="{{vertices.length > 0}}">已选点：{{vertices.length}} 个</text>
