@@ -26,7 +26,11 @@ Page({
     lastTouchDistance: 0,
     lastTouchX: 0,
     lastTouchY: 0,
-    isPinching: false
+    isPinching: false,
+    // 拖动编辑状态
+    editingPoint: null,  // 当前编辑的点 {x, y, type: 'ruler1'|'ruler2'|'vertex', index}
+    dragStartX: 0,
+    dragStartY: 0
   },
 
   chooseImage() {
@@ -84,7 +88,6 @@ Page({
           calibrationOffsetY: 0
         });
 
-        // 显示图片
         const img = canvas.createImage();
         img.src = this.data.imagePath;
         img.onload = () => {
@@ -127,17 +130,39 @@ Page({
         isPinching: true
       });
     } else if (touches.length === 1) {
-      this.setData({
-        lastTouchX: touches[0].x,
-        lastTouchY: touches[0].y
-      });
+      // 检查是否点击到标记点
+      const touch = touches[0];
+      const hitPoint = this.checkHitPoint(touch.x, touch.y, 'calibration');
+      if (hitPoint) {
+        this.setData({
+          editingPoint: hitPoint,
+          dragStartX: touch.x,
+          dragStartY: touch.y
+        });
+      } else {
+        this.setData({
+          lastTouchX: touch.x,
+          lastTouchY: touch.y,
+          editingPoint: null
+        });
+      }
     }
   },
 
   // 触控移动
   onCalibrationTouchMove(e) {
     const touches = e.touches;
-    if (touches.length === 2 && this.data.isPinching) {
+    if (this.data.editingPoint) {
+      // 拖动标记点
+      const touch = touches[0];
+      const dx = touch.x - this.data.dragStartX;
+      const dy = touch.y - this.data.dragStartY;
+      this.dragPoint(dx, dy, 'calibration');
+      this.setData({
+        dragStartX: touch.x,
+        dragStartY: touch.y
+      });
+    } else if (touches.length === 2 && this.data.isPinching) {
       const dx = touches[0].x - touches[1].x;
       const dy = touches[0].y - touches[1].y;
       const distance = Math.sqrt(dx * dx + dy * dy);
@@ -162,11 +187,101 @@ Page({
 
   // 触控结束
   onCalibrationTouchEnd(e) {
-    this.setData({ isPinching: false });
+    this.setData({ isPinching: false, editingPoint: null });
+  },
+
+  // 检查是否点击到标记点
+  checkHitPoint(touchX, touchY, type) {
+    const hitRadius = 30;
+    const { offsetX, offsetY, scale } = this.currentDraw || { offsetX: 0, offsetY: 0, scale: 1 };
+    const { origOffsetX, origOffsetY, origScale } = type === 'calibration' ? this.canvasData : this.polyData;
+
+    if (type === 'calibration') {
+      // 检查0mm点
+      if (this.data.rulerPoint1) {
+        const p1 = this.data.rulerPoint1;
+        const sx = offsetX + p1.x * origScale * scale;
+        const sy = offsetY + p1.y * origScale * scale;
+        if (Math.abs(touchX - sx) < hitRadius && Math.abs(touchY - sy) < hitRadius) {
+          return { x: p1.x, y: p1.y, type: 'ruler1' };
+        }
+      }
+      // 检查10mm点
+      if (this.data.rulerPoint2) {
+        const p2 = this.data.rulerPoint2;
+        const sx = offsetX + p2.x * origScale * scale;
+        const sy = offsetY + p2.y * origScale * scale;
+        if (Math.abs(touchX - sx) < hitRadius && Math.abs(touchY - sy) < hitRadius) {
+          return { x: p2.x, y: p2.y, type: 'ruler2' };
+        }
+      }
+    } else {
+      // 检查顶点
+      for (let i = 0; i < this.data.vertices.length; i++) {
+        const v = this.data.vertices[i];
+        const sx = offsetX + v.x * origScale * scale;
+        const sy = offsetY + v.y * origScale * scale;
+        if (Math.abs(touchX - sx) < hitRadius && Math.abs(touchY - sy) < hitRadius) {
+          return { x: v.x, y: v.y, type: 'vertex', index: i };
+        }
+      }
+    }
+    return null;
+  },
+
+  // 拖动点
+  dragPoint(dx, dy, type) {
+    const dataKey = type === 'calibration' ? 'calibrationScale' : 'polygonScale';
+    const origScale = type === 'calibration' ? this.canvasData.origScale : this.polyData.origScale;
+    const scale = this.data[dataKey];
+    const imgDx = dx / (scale * origScale);
+    const imgDy = dy / (scale * origScale);
+
+    const editing = this.data.editingPoint;
+    if (!editing) return;
+
+    if (type === 'calibration') {
+      if (editing.type === 'ruler1') {
+        const newPoint = { x: editing.x + imgDx, y: editing.y + imgDy };
+        this.setData({ rulerPoint1: newPoint });
+        this.setData({ editingPoint: { ...newPoint, type: 'ruler1' } });
+        this.redrawCalibration();
+      } else if (editing.type === 'ruler2') {
+        const newPoint = { x: editing.x + imgDx, y: editing.y + imgDy };
+        this.setData({ rulerPoint2: newPoint });
+        this.setData({ editingPoint: { ...newPoint, type: 'ruler2' } });
+        // 重新计算
+        this.recalcCalibration();
+      }
+    } else {
+      if (editing.type === 'vertex') {
+        const newVertices = [...this.data.vertices];
+        newVertices[editing.index] = { x: editing.x + imgDx, y: editing.y + imgDy };
+        this.setData({ vertices: newVertices });
+        this.setData({ editingPoint: { ...newVertices[editing.index], type: 'vertex', index: editing.index } });
+        this.redrawPolygon();
+        this.updatePreviewArea();
+      }
+    }
+  },
+
+  // 重新计算校准
+  recalCalibration() {
+    const p1 = this.data.rulerPoint1;
+    const p2 = this.data.rulerPoint2;
+    if (!p1 || !p2) return;
+    const pixelDistance = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+    const pxPerMm = pixelDistance / 10;
+    const mmPerPx = (1 / pxPerMm).toFixed(4);
+    this.setData({
+      pxPerMm,
+      mmPerPxStr: mmPerPx
+    });
   },
 
   // 重绘标定画面
   redrawCalibration() {
+    if (!this.canvasData) return;
     const { canvas, ctx, dpr, drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.canvasData;
     const canvasW = this.data.calibrationCanvasW;
     const canvasH = this.data.calibrationCanvasH;
@@ -177,51 +292,90 @@ Page({
     ctx.clearRect(0, 0, canvasW, canvasH);
     ctx.drawImage(img, offsetX, offsetY, drawW * scale, drawH * scale);
 
-    // 绘制标记点
-    const p1 = this.data.rulerPoint1;
-    const p2 = this.data.rulerPoint2;
-    if (p1 && p2) {
-      const pointScale = (canvasW / drawW) / origScale;
+    // 绘制0mm点
+    if (this.data.rulerPoint1) {
+      const p1 = this.data.rulerPoint1;
+      const screenX = offsetX + p1.x * origScale * scale;
+      const screenY = offsetY + p1.y * origScale * scale;
+      this.drawPoint(ctx, screenX, screenY, '0mm', this.data.editingPoint?.type === 'ruler1');
+    }
+
+    // 绘制10mm点
+    if (this.data.rulerPoint2) {
+      const p2 = this.data.rulerPoint2;
+      const screenX = offsetX + p2.x * origScale * scale;
+      const screenY = offsetY + p2.y * origScale * scale;
+      this.drawPoint(ctx, screenX, screenY, '10mm', this.data.editingPoint?.type === 'ruler2');
+    }
+
+    // 绘制连接线
+    if (this.data.rulerPoint1 && this.data.rulerPoint2) {
+      const p1 = this.data.rulerPoint1;
+      const p2 = this.data.rulerPoint2;
       ctx.save();
-      ctx.fillStyle = '#ff3b30';
       ctx.strokeStyle = '#ff3b30';
-      ctx.lineWidth = 3;
-
-      const screenX1 = offsetX + p1.x * origScale * scale;
-      const screenY1 = offsetY + p1.y * origScale * scale;
-      const screenX2 = offsetX + p2.x * origScale * scale;
-      const screenY2 = offsetY + p2.y * origScale * scale;
-
-      [ { x: screenX1, y: screenY1 }, { x: screenX2, y: screenY2 } ].forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      });
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 4]);
       ctx.beginPath();
-      ctx.moveTo(screenX1, screenY1);
-      ctx.lineTo(screenX2, screenY2);
+      ctx.moveTo(offsetX + p1.x * origScale * scale, offsetY + p1.y * origScale * scale);
+      ctx.lineTo(offsetX + p2.x * origScale * scale, offsetY + p2.y * origScale * scale);
       ctx.stroke();
       ctx.restore();
     }
 
-    // 保存当前的显示参数
     this.currentDraw = { offsetX, offsetY, scale };
   },
 
-  // 点击标定比例尺
+  // 绘制标记点
+  drawPoint(ctx, x, y, label, isEditing) {
+    ctx.save();
+    ctx.fillStyle = '#ff3b30';
+    ctx.strokeStyle = '#ff3b30';
+    ctx.lineWidth = 2;
+
+    // 外圈
+    ctx.beginPath();
+    ctx.arc(x, y, isEditing ? 18 : 12, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 填充
+    ctx.fillStyle = isEditing ? 'rgba(255,59,48,0.4)' : 'rgba(255,59,48,0.2)';
+    ctx.fill();
+
+    // 中心点
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff3b30';
+    ctx.fill();
+
+    // 标签
+    if (label) {
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillStyle = '#fff';
+      const textWidth = ctx.measureText(label).width;
+      ctx.fillStyle = '#ff3b30';
+      ctx.fillText(label, x - textWidth/2, y - 25);
+    }
+
+    ctx.restore();
+  },
+
+  // 点击标定
   onCalibrationTap(e) {
     if (this.data.calibrationDone) return;
     const { x, y } = e.detail;
     const { offsetX, offsetY, scale } = this.currentDraw || { offsetX: 0, offsetY: 0, scale: 1 };
     const { origOffsetX, origOffsetY, origScale } = this.canvasData;
 
-    // 转换为原始图片坐标
     const imgX = (x - offsetX) / (origScale * scale);
     const imgY = (y - offsetY) / (origScale * scale);
 
     if (this.data.calibrationTarget === '0mm') {
-      this.setData({ calibrationTarget: '10mm', rulerPoint1: { x: imgX, y: imgY } });
+      this.setData({
+        calibrationTarget: '10mm',
+        rulerPoint1: { x: imgX, y: imgY },
+        editingPoint: { x: imgX, y: imgY, type: 'ruler1' }
+      });
       this.redrawCalibration();
     } else {
       const point2 = { x: imgX, y: imgY };
@@ -234,7 +388,8 @@ Page({
         rulerPoint2: point2,
         pxPerMm,
         mmPerPxStr: mmPerPx,
-        calibrationDone: true
+        calibrationDone: true,
+        editingPoint: { x: imgX, y: imgY, type: 'ruler2' }
       });
       this.redrawCalibration();
     }
@@ -250,17 +405,23 @@ Page({
       calibrationDone: false,
       calibrationScale: 1,
       calibrationOffsetX: 0,
-      calibrationOffsetY: 0
+      calibrationOffsetY: 0,
+      editingPoint: null
     });
     this.initCalibrationCanvas();
   },
 
   confirmCalibration() {
-    this.setData({ step: 3 });
+    if (!this.data.rulerPoint1 || !this.data.rulerPoint2) {
+      wx.showToast({ title: '请先标定比例尺', icon: 'none' });
+      return;
+    }
+    this.setData({ step: 3, editingPoint: null });
     this.initPolygonCanvas();
   },
 
-  // Step 3: 初始化多边形画布
+  // ============ Step 3: 多边形绘制 ============
+
   initPolygonCanvas() {
     const query = wx.createSelectorQuery();
     query.select('#polygonCanvas')
@@ -302,7 +463,6 @@ Page({
       });
   },
 
-  // 缩放控制
   zoomInPolygon() {
     const newScale = Math.min(this.data.polygonScale + 0.25, 3);
     this.setData({ polygonScale: newScale });
@@ -315,7 +475,6 @@ Page({
     this.redrawPolygon();
   },
 
-  // 触控开始
   onPolygonTouchStart(e) {
     const touches = e.touches;
     if (touches.length === 2) {
@@ -327,17 +486,36 @@ Page({
         isPinching: true
       });
     } else if (touches.length === 1) {
-      this.setData({
-        lastTouchX: touches[0].x,
-        lastTouchY: touches[0].y
-      });
+      const touch = touches[0];
+      const hitPoint = this.checkHitPoint(touch.x, touch.y, 'polygon');
+      if (hitPoint) {
+        this.setData({
+          editingPoint: hitPoint,
+          dragStartX: touch.x,
+          dragStartY: touch.y
+        });
+      } else {
+        this.setData({
+          lastTouchX: touch.x,
+          lastTouchY: touch.y,
+          editingPoint: null
+        });
+      }
     }
   },
 
-  // 触控移动
   onPolygonTouchMove(e) {
     const touches = e.touches;
-    if (touches.length === 2 && this.data.isPinching) {
+    if (this.data.editingPoint && this.data.editingPoint.type === 'vertex') {
+      const touch = touches[0];
+      const dx = touch.x - this.data.dragStartX;
+      const dy = touch.y - this.data.dragStartY;
+      this.dragPoint(dx, dy, 'polygon');
+      this.setData({
+        dragStartX: touch.x,
+        dragStartY: touch.y
+      });
+    } else if (touches.length === 2 && this.data.isPinching) {
       const dx = touches[0].x - touches[1].x;
       const dy = touches[0].y - touches[1].y;
       const distance = Math.sqrt(dx * dx + dy * dy);
@@ -347,7 +525,7 @@ Page({
       this.setData({ polygonScale: newScale });
       this.redrawPolygon();
       this.setData({ lastTouchDistance: distance });
-    } else if (touches.length === 1 && !this.data.isPinching) {
+    } else if (touches.length === 1 && !this.data.isPinching && !this.data.editingPoint) {
       const dx = touches[0].x - this.data.lastTouchX;
       const dy = touches[0].y - this.data.lastTouchY;
       this.setData({
@@ -360,14 +538,13 @@ Page({
     }
   },
 
-  // 触控结束
   onPolygonTouchEnd(e) {
-    this.setData({ isPinching: false });
+    this.setData({ isPinching: false, editingPoint: null });
   },
 
-  // 重绘多边形
   redrawPolygon() {
-    const { ctx, dpr, drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.polyData;
+    if (!this.polyData) return;
+    const { canvas, ctx, dpr, drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.polyData;
     const canvasW = this.data.polygonCanvasW;
     const canvasH = this.data.polygonCanvasH;
     const scale = this.data.polygonScale;
@@ -383,7 +560,7 @@ Page({
     ctx.save();
     ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 3;
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+    ctx.fillStyle = 'rgba(59,130,246,0.15)';
 
     const first = vertices[0];
     ctx.beginPath();
@@ -397,19 +574,29 @@ Page({
     if (vertices.length >= 3) ctx.fill();
 
     // 绘制顶点
-    ctx.fillStyle = '#3b82f6';
-    vertices.forEach(v => {
+    vertices.forEach((v, i) => {
+      const screenX = offsetX + v.x * origScale * scale;
+      const screenY = offsetY + v.y * origScale * scale;
+      const isEditing = this.data.editingPoint?.type === 'vertex' && this.data.editingPoint?.index === i;
+      ctx.fillStyle = '#3b82f6';
       ctx.beginPath();
-      ctx.arc(offsetX + v.x * origScale * scale, offsetY + v.y * origScale * scale, 6, 0, Math.PI * 2);
+      ctx.arc(screenX, screenY, isEditing ? 14 : 10, 0, Math.PI * 2);
       ctx.fill();
+      // 顶点编号
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText((i + 1).toString(), screenX, screenY);
     });
+
     ctx.restore();
 
     this.currentPolyDraw = { offsetX, offsetY, scale };
   },
 
-  // 点击画多边形顶点
   onPolygonTap(e) {
+    if (this.data.editingPoint) return;  // 正在拖动时不添加点
     const { x, y } = e.detail;
     const { offsetX, offsetY, scale } = this.currentPolyDraw || { offsetX: 0, offsetY: 0, scale: 1 };
     const { origOffsetX, origOffsetY, origScale } = this.polyData;
@@ -443,7 +630,7 @@ Page({
   },
 
   resetPolygon() {
-    this.setData({ vertices: [], previewArea: '' });
+    this.setData({ vertices: [], previewArea: '', editingPoint: null });
     this.redrawPolygon();
   },
 
@@ -461,7 +648,7 @@ Page({
     });
   },
 
-  // Step 4: 保存记录
+  // Step 4
   saveRecord() {
     const record = {
       id: `record_${Date.now()}`,
@@ -478,7 +665,6 @@ Page({
     wx.showToast({ title: '已保存', icon: 'success' });
   },
 
-  // Step 4: 分享结果
   shareResult() {
     wx.showShareMenu({ withShareTicket: true });
     wx.showToast({ title: '请点击右上角分享', icon: 'none', duration: 2000 });
