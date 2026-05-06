@@ -28,9 +28,12 @@ Page({
     lastTouchY: 0,
     isPinching: false,
     // 拖动编辑状态
-    editingPoint: null,  // 当前编辑的点 {x, y, type: 'ruler1'|'ruler2'|'vertex', index}
+    editingPoint: null,
     dragStartX: 0,
-    dragStartY: 0
+    dragStartY: 0,
+    // 自动识别状态
+    isDetecting: false,
+    detectionProgress: ''
   },
 
   chooseImage() {
@@ -63,7 +66,8 @@ Page({
     this.initCalibrationCanvas();
   },
 
-  // Step 2: 初始化比例尺标定画布
+  // ============ Step 2: 比例尺标定 ============
+
   initCalibrationCanvas() {
     const query = wx.createSelectorQuery();
     query.select('#calibrationCanvas')
@@ -105,7 +109,192 @@ Page({
       });
   },
 
-  // 缩放控制
+  // 自动检测比例尺
+  autoDetectRuler() {
+    if (this.data.isDetecting) return;
+
+    this.setData({ isDetecting: true, detectionProgress: '正在分析图片...' });
+
+    const { canvas, ctx, dpr, drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.canvasData;
+    const canvasW = this.data.calibrationCanvasW;
+    const canvasH = this.data.calibrationCanvasH;
+
+    // 获取图片像素数据
+    const imageData = ctx.getImageData(0, 0, canvasW, canvasH);
+    const data = imageData.data;
+
+    // 查找水平标尺线（比例尺通常是水平放置的）
+    const rulerY = this.findRulerLine(data, canvasW, canvasH);
+
+    if (rulerY > 0) {
+      // 找到标尺线，查找0mm和10mm刻度
+      const points = this.findRulerMarks(data, canvasW, canvasH, rulerY);
+
+      if (points.mark0 && points.mark10) {
+        // 转换为图片坐标
+        const p0 = { x: (points.mark0 - origOffsetX) / origScale, y: (rulerY - origOffsetY) / origScale };
+        const p10 = { x: (points.mark10 - origOffsetX) / origScale, y: (rulerY - origOffsetY) / origScale };
+
+        this.setData({
+          rulerPoint1: p0,
+          rulerPoint2: p10,
+          calibrationDone: true,
+          pxPerMm: points.pxPerMm,
+          mmPerPxStr: (1 / points.pxPerMm).toFixed(4)
+        });
+
+        wx.showToast({ title: '自动识别成功', icon: 'success' });
+      } else {
+        wx.showToast({ title: '未能识别比例尺，请手动标定', icon: 'none' });
+      }
+    } else {
+      wx.showToast({ title: '未能识别比例尺，请手动标定', icon: 'none' });
+    }
+
+    this.setData({ isDetecting: false, detectionProgress: '' });
+    this.redrawCalibration();
+  },
+
+  // 查找标尺线（水平方向最密集的线条）
+  findRulerLine(data, width, height) {
+    const gray = new Uint8Array(width * height);
+
+    // 转灰度图
+    for (let i = 0; i < width * height; i++) {
+      const idx = i * 4;
+      gray[i] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
+    }
+
+    // 查找水平边缘（检测显著的水平和垂直线）
+    const rowDensity = new Float32Array(height);
+
+    for (let y = 10; y < height - 10; y++) {
+      let edgeCount = 0;
+      for (let x = 10; x < width - 10; x++) {
+        const idx = y * width + x;
+        // 水平边缘
+        if (x > 0 && x < width - 1) {
+          const diff = Math.abs(gray[idx] - gray[idx - 1]);
+          if (diff > 30) edgeCount++;
+        }
+      }
+      rowDensity[y] = edgeCount;
+    }
+
+    // 找到边缘最密集的行（可能是标尺位置）
+    let maxDensity = 0;
+    let rulerY = -1;
+
+    for (let y = height * 0.3; y < height * 0.7; y++) {
+      // 检测区域密度
+      let regionDensity = 0;
+      for (let dy = -20; dy <= 20; dy++) {
+        const ny = Math.floor(y + dy);
+        if (ny >= 0 && ny < height) {
+          regionDensity += rowDensity[ny];
+        }
+      }
+      if (regionDensity > maxDensity) {
+        maxDensity = regionDensity;
+        rulerY = y;
+      }
+    }
+
+    return rulerY;
+  },
+
+  // 查找比例尺刻度
+  findRulerMarks(data, width, height, rulerY) {
+    const gray = new Uint8Array(width * height);
+
+    for (let i = 0; i < width * height; i++) {
+      const idx = i * 4;
+      gray[i] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
+    }
+
+    // 在标尺线附近查找垂直刻度线
+    const marks = [];
+    const searchRange = 30;
+
+    for (let x = width * 0.2; x < width * 0.8; x++) {
+      // 检查是否是垂直刻度线
+      let isMark = true;
+      for (let dy = -searchRange; dy <= searchRange; dy++) {
+        const ny = Math.floor(rulerY + dy);
+        if (ny >= 0 && ny < height) {
+          const idx = ny * width + Math.floor(x);
+          const leftIdx = ny * width + Math.floor(x - 2);
+          const rightIdx = ny * width + Math.floor(x + 2);
+
+          if (leftIdx >= 0 && rightIdx < width * height) {
+            const center = gray[idx];
+            const left = gray[leftIdx];
+            const right = gray[rightIdx];
+
+            // 刻度线应该是颜色突变的地方
+            if (Math.abs(center - left) < 20 || Math.abs(center - right) < 20) {
+              isMark = false;
+              break;
+            }
+          }
+        }
+      }
+
+      if (isMark) {
+        marks.push(x);
+      }
+    }
+
+    // 简化：假设标尺上有多个刻度，找到第一个（0mm）和第11个（10mm，假设1mm间隔）
+    if (marks.length >= 11) {
+      // 取前11个刻度
+      const first10marks = marks.slice(0, 11);
+      const pxPerMark = (first10marks[10] - first10marks[0]) / 10;
+
+      return {
+        mark0: first10marks[0],
+        mark10: first10marks[10],
+        pxPerMm: pxPerMark / 10  // 每10mm的像素 / 10 = 每mm的像素
+      };
+    }
+
+    // 备选方案：找不到足够刻度时，使用图像边缘检测
+    return this.findRulerByEdgeScan(data, width, height, rulerY);
+  },
+
+  // 备选：边缘扫描检测
+  findRulerByEdgeScan(data, width, height, rulerY) {
+    const gray = new Uint8Array(width * height);
+
+    for (let i = 0; i < width * height; i++) {
+      const idx = i * 4;
+      gray[i] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
+    }
+
+    // 查找从左到右的颜色变化（标尺刻度）
+    let lastGray = gray[Math.floor(rulerY) * width];
+    let transitions = [];
+
+    for (let x = 1; x < width - 1; x++) {
+      const current = gray[Math.floor(rulerY) * width + x];
+      if (Math.abs(current - lastGray) > 40) {
+        transitions.push(x);
+        lastGray = current;
+      }
+    }
+
+    if (transitions.length >= 2) {
+      // 取第一个和最后一个作为0和10的近似位置
+      return {
+        mark0: transitions[0],
+        mark10: transitions[transitions.length - 1],
+        pxPerMm: (transitions[transitions.length - 1] - transitions[0]) / 10
+      };
+    }
+
+    return null;
+  },
+
   zoomInCalibration() {
     const newScale = Math.min(this.data.calibrationScale + 0.25, 3);
     this.setData({ calibrationScale: newScale });
@@ -118,7 +307,6 @@ Page({
     this.redrawCalibration();
   },
 
-  // 触控开始
   onCalibrationTouchStart(e) {
     const touches = e.touches;
     if (touches.length === 2) {
@@ -130,7 +318,6 @@ Page({
         isPinching: true
       });
     } else if (touches.length === 1) {
-      // 检查是否点击到标记点
       const touch = touches[0];
       const hitPoint = this.checkHitPoint(touch.x, touch.y, 'calibration');
       if (hitPoint) {
@@ -149,11 +336,9 @@ Page({
     }
   },
 
-  // 触控移动
   onCalibrationTouchMove(e) {
     const touches = e.touches;
     if (this.data.editingPoint) {
-      // 拖动标记点
       const touch = touches[0];
       const dx = touch.x - this.data.dragStartX;
       const dy = touch.y - this.data.dragStartY;
@@ -172,7 +357,7 @@ Page({
       this.setData({ calibrationScale: newScale });
       this.redrawCalibration();
       this.setData({ lastTouchDistance: distance });
-    } else if (touches.length === 1 && !this.data.isPinching) {
+    } else if (touches.length === 1 && !this.data.isPinching && !this.data.editingPoint) {
       const dx = touches[0].x - this.data.lastTouchX;
       const dy = touches[0].y - this.data.lastTouchY;
       this.setData({
@@ -185,19 +370,16 @@ Page({
     }
   },
 
-  // 触控结束
   onCalibrationTouchEnd(e) {
     this.setData({ isPinching: false, editingPoint: null });
   },
 
-  // 检查是否点击到标记点
   checkHitPoint(touchX, touchY, type) {
     const hitRadius = 30;
     const { offsetX, offsetY, scale } = this.currentDraw || { offsetX: 0, offsetY: 0, scale: 1 };
     const { origOffsetX, origOffsetY, origScale } = type === 'calibration' ? this.canvasData : this.polyData;
 
     if (type === 'calibration') {
-      // 检查0mm点
       if (this.data.rulerPoint1) {
         const p1 = this.data.rulerPoint1;
         const sx = offsetX + p1.x * origScale * scale;
@@ -206,7 +388,6 @@ Page({
           return { x: p1.x, y: p1.y, type: 'ruler1' };
         }
       }
-      // 检查10mm点
       if (this.data.rulerPoint2) {
         const p2 = this.data.rulerPoint2;
         const sx = offsetX + p2.x * origScale * scale;
@@ -216,7 +397,6 @@ Page({
         }
       }
     } else {
-      // 检查顶点
       for (let i = 0; i < this.data.vertices.length; i++) {
         const v = this.data.vertices[i];
         const sx = offsetX + v.x * origScale * scale;
@@ -229,7 +409,6 @@ Page({
     return null;
   },
 
-  // 拖动点
   dragPoint(dx, dy, type) {
     const dataKey = type === 'calibration' ? 'calibrationScale' : 'polygonScale';
     const origScale = type === 'calibration' ? this.canvasData.origScale : this.polyData.origScale;
@@ -250,7 +429,6 @@ Page({
         const newPoint = { x: editing.x + imgDx, y: editing.y + imgDy };
         this.setData({ rulerPoint2: newPoint });
         this.setData({ editingPoint: { ...newPoint, type: 'ruler2' } });
-        // 重新计算
         this.recalcCalibration();
       }
     } else {
@@ -265,8 +443,7 @@ Page({
     }
   },
 
-  // 重新计算校准
-  recalCalibration() {
+  recalcCalibration() {
     const p1 = this.data.rulerPoint1;
     const p2 = this.data.rulerPoint2;
     if (!p1 || !p2) return;
@@ -279,7 +456,6 @@ Page({
     });
   },
 
-  // 重绘标定画面
   redrawCalibration() {
     if (!this.canvasData) return;
     const { canvas, ctx, dpr, drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.canvasData;
@@ -292,7 +468,6 @@ Page({
     ctx.clearRect(0, 0, canvasW, canvasH);
     ctx.drawImage(img, offsetX, offsetY, drawW * scale, drawH * scale);
 
-    // 绘制0mm点
     if (this.data.rulerPoint1) {
       const p1 = this.data.rulerPoint1;
       const screenX = offsetX + p1.x * origScale * scale;
@@ -300,7 +475,6 @@ Page({
       this.drawPoint(ctx, screenX, screenY, '0mm', this.data.editingPoint?.type === 'ruler1');
     }
 
-    // 绘制10mm点
     if (this.data.rulerPoint2) {
       const p2 = this.data.rulerPoint2;
       const screenX = offsetX + p2.x * origScale * scale;
@@ -308,7 +482,6 @@ Page({
       this.drawPoint(ctx, screenX, screenY, '10mm', this.data.editingPoint?.type === 'ruler2');
     }
 
-    // 绘制连接线
     if (this.data.rulerPoint1 && this.data.rulerPoint2) {
       const p1 = this.data.rulerPoint1;
       const p2 = this.data.rulerPoint2;
@@ -326,41 +499,34 @@ Page({
     this.currentDraw = { offsetX, offsetY, scale };
   },
 
-  // 绘制标记点
   drawPoint(ctx, x, y, label, isEditing) {
     ctx.save();
     ctx.fillStyle = '#ff3b30';
     ctx.strokeStyle = '#ff3b30';
     ctx.lineWidth = 2;
 
-    // 外圈
     ctx.beginPath();
     ctx.arc(x, y, isEditing ? 18 : 12, 0, Math.PI * 2);
     ctx.stroke();
 
-    // 填充
     ctx.fillStyle = isEditing ? 'rgba(255,59,48,0.4)' : 'rgba(255,59,48,0.2)';
     ctx.fill();
 
-    // 中心点
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, Math.PI * 2);
     ctx.fillStyle = '#ff3b30';
     ctx.fill();
 
-    // 标签
     if (label) {
       ctx.font = 'bold 22px sans-serif';
-      ctx.fillStyle = '#fff';
-      const textWidth = ctx.measureText(label).width;
       ctx.fillStyle = '#ff3b30';
+      const textWidth = ctx.measureText(label).width;
       ctx.fillText(label, x - textWidth/2, y - 25);
     }
 
     ctx.restore();
   },
 
-  // 点击标定
   onCalibrationTap(e) {
     if (this.data.calibrationDone) return;
     const { x, y } = e.detail;
@@ -420,7 +586,7 @@ Page({
     this.initPolygonCanvas();
   },
 
-  // ============ Step 3: 多边形绘制 ============
+  // ============ Step 3: 病变区域描画 ============
 
   initPolygonCanvas() {
     const query = wx.createSelectorQuery();
@@ -461,6 +627,92 @@ Page({
           wx.showToast({ title: '图片加载失败', icon: 'none' });
         };
       });
+  },
+
+  // 自动检测病变轮廓
+  autoDetectContour() {
+    if (this.data.isDetecting) return;
+
+    this.setData({ isDetecting: true, detectionProgress: '正在检测边缘...' });
+
+    const { canvas, ctx, dpr, drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.polyData;
+    const canvasW = this.data.polygonCanvasW;
+    const canvasH = this.data.polygonCanvasH;
+
+    const imageData = ctx.getImageData(0, 0, canvasW, canvasH);
+    const data = imageData.data;
+
+    // 使用边缘检测查找轮廓
+    const contour = this.findContour(data, canvasW, canvasH);
+
+    if (contour && contour.length >= 3) {
+      // 转换为图片坐标
+      const imgVertices = contour.map(p => ({
+        x: (p.x - origOffsetX) / origScale,
+        y: (p.y - origOffsetY) / origScale
+      }));
+
+      this.setData({ vertices: imgVertices });
+      wx.showToast({ title: '自动识别成功', icon: 'success' });
+    } else {
+      wx.showToast({ title: '未能识别轮廓，请手动绘制', icon: 'none' });
+    }
+
+    this.setData({ isDetecting: false, detectionProgress: '' });
+    this.redrawPolygon();
+    this.updatePreviewArea();
+  },
+
+  // 边缘检测找轮廓
+  findContour(data, width, height) {
+    const gray = new Uint8Array(width * height);
+
+    // 转灰度图
+    for (let i = 0; i < width * height; i++) {
+      const idx = i * 4;
+      gray[i] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
+    }
+
+    // 简单边缘检测 (Sobel简化版)
+    const edges = new Uint8Array(width * height);
+
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = y * width + x;
+        const gx = Math.abs(gray[idx + 1] - gray[idx - 1]);
+        const gy = Math.abs(gray[idx + width] - gray[idx - width]);
+        edges[idx] = Math.sqrt(gx * gx + gy * gy) | 0;
+      }
+    }
+
+    // 从中心向外搜索找到封闭轮廓
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    // 简单方法：查找与中心连线的边缘点
+    const contourPoints = [];
+    const step = 20; // 每隔20度采样一个点
+
+    for (let angle = 0; angle < 360; angle += step) {
+      const rad = angle * Math.PI / 180;
+      const dx = Math.cos(rad);
+      const dy = Math.sin(rad);
+
+      for (let dist = 0; dist < Math.min(width, height) / 2; dist += 2) {
+        const x = Math.floor(centerX + dx * dist);
+        const y = Math.floor(centerY + dy * dist);
+
+        if (x < 1 || x >= width - 1 || y < 1 || y >= height - 1) break;
+
+        const edgeIdx = y * width + x;
+        if (edges[edgeIdx] > 30) {
+          contourPoints.push({ x, y });
+          break;
+        }
+      }
+    }
+
+    return contourPoints.length >= 3 ? contourPoints : null;
   },
 
   zoomInPolygon() {
@@ -573,7 +825,6 @@ Page({
     ctx.stroke();
     if (vertices.length >= 3) ctx.fill();
 
-    // 绘制顶点
     vertices.forEach((v, i) => {
       const screenX = offsetX + v.x * origScale * scale;
       const screenY = offsetY + v.y * origScale * scale;
@@ -582,7 +833,6 @@ Page({
       ctx.beginPath();
       ctx.arc(screenX, screenY, isEditing ? 14 : 10, 0, Math.PI * 2);
       ctx.fill();
-      // 顶点编号
       ctx.font = 'bold 20px sans-serif';
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
@@ -596,7 +846,7 @@ Page({
   },
 
   onPolygonTap(e) {
-    if (this.data.editingPoint) return;  // 正在拖动时不添加点
+    if (this.data.editingPoint) return;
     const { x, y } = e.detail;
     const { offsetX, offsetY, scale } = this.currentPolyDraw || { offsetX: 0, offsetY: 0, scale: 1 };
     const { origOffsetX, origOffsetY, origScale } = this.polyData;

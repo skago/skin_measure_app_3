@@ -16,8 +16,8 @@
   <!-- Step 2: 标定比例尺 -->
   <view wx:if="{{step === 2}}" class="step-container">
     <text class="step-title">Step 2 / 4：标定比例尺</text>
-    <text class="guide-text">请点击比例尺上 {{calibrationTarget}} 刻度</text>
-    <view class="guide-tip">双指可缩放图片，单指可拖动</view>
+    <text class="guide-text" wx:if="{{!calibrationDone}}">点击比例尺的 0mm 和 10mm 刻度，或使用自动识别</text>
+    <text class="guide-text" wx:if="{{calibrationDone}}">已标定完成，可拖动标记点调整</text>
     <view class="canvas-wrapper">
       <canvas type="2d" id="calibrationCanvas" class="canvas"
         bindtouchstart="onCalibrationTouchStart"
@@ -29,6 +29,12 @@
       <button class="zoom-btn" bindtap="zoomOutCalibration">−</button>
       <text class="zoom-scale">{{Math.round(calibrationScale * 100)}}%</text>
       <button class="zoom-btn" bindtap="zoomInCalibration">+</button>
+    </view>
+    <view class="auto-detect-row">
+      <button class="btn-auto" bindtap="autoDetectRuler" wx:if="{{!calibrationDone && !isDetecting}}">
+        <text>🔍 自动识别比例尺</text>
+      </button>
+      <text wx:if="{{isDetecting}}" class="detecting-text">{{detectionProgress}}</text>
     </view>
     <view class="calibration-info" wx:if="{{pxPerMm}}">
       <text>换算系数：1px = {{mmPerPxStr}} mm</text>
@@ -42,8 +48,8 @@
   <!-- Step 3: 描画病变区域 -->
   <view wx:if="{{step === 3}}" class="step-container">
     <text class="step-title">Step 3 / 4：描画病变区域</text>
-    <text class="guide-text">点击图中病变区域轮廓顶点（至少3点）</text>
-    <view class="guide-tip">双指可缩放图片，单指可拖动</view>
+    <text class="guide-text" wx:if="{{vertices.length < 3}}">点击绘制顶点，或使用自动识别</text>
+    <text class="guide-text" wx:if="{{vertices.length >= 3}}">已绘制完成，可拖动顶点调整</text>
     <view class="canvas-wrapper">
       <canvas type="2d" id="polygonCanvas" class="canvas"
         bindtouchstart="onPolygonTouchStart"
@@ -56,9 +62,15 @@
       <text class="zoom-scale">{{Math.round(polygonScale * 100)}}%</text>
       <button class="zoom-btn" bindtap="zoomInPolygon">+</button>
     </view>
+    <view class="auto-detect-row">
+      <button class="btn-auto" bindtap="autoDetectContour" wx:if="{{!isDetecting}}">
+        <text>🔍 自动识别轮廓</text>
+      </button>
+      <text wx:if="{{isDetecting}}" class="detecting-text">{{detectionProgress}}</text>
+    </view>
     <view class="polygon-info">
       <text wx:if="{{vertices.length > 0}}">已选点：{{vertices.length}} 个</text>
-      <text wx:if="{{previewArea}}"> 预览面积：{{previewArea}} cm²</text>
+      <text wx:if="{{previewArea}}"> 面积：{{previewArea}} cm²</text>
     </view>
     <view class="btn-row">
       <button wx:if="{{vertices.length > 0}}" class="btn-undo" bindtap="undoVertex">撤销</button>
