@@ -62,7 +62,7 @@ Page({
       wx.showToast({ title: '请先选择图片', icon: 'none' });
       return;
     }
-    this.setData({ step: 2 });
+    this.setData({ step: 2, calibrationDone: false });
     this.initCalibrationCanvas();
   },
 
@@ -73,7 +73,10 @@ Page({
     query.select('#calibrationCanvas')
       .fields({ node: true, size: true })
       .exec((res) => {
-        if (!res[0]) return;
+        if (!res[0]) {
+          console.error('Canvas not found');
+          return;
+        }
         const canvas = res[0].node;
         const ctx = canvas.getContext('2d');
         const dpr = wx.getSystemInfoSync().pixelRatio;
@@ -89,11 +92,11 @@ Page({
           calibrationCanvasH: canvasH,
           calibrationScale: 1,
           calibrationOffsetX: 0,
-          calibrationOffsetY: 0
+          calibrationOffsetY: 0,
+          calibrationReady: false
         });
 
         const img = canvas.createImage();
-        img.src = this.data.imagePath;
         img.onload = () => {
           const scale = Math.min(canvasW / img.width, canvasH / img.height);
           const drawW = img.width * scale;
@@ -101,18 +104,22 @@ Page({
           const offsetX = (canvasW - drawW) / 2;
           const offsetY = (canvasH - drawH) / 2;
           this.canvasData = { canvas, ctx, dpr, drawW, drawH, origOffsetX: offsetX, origOffsetY: offsetY, origScale: scale, img };
+          this.setData({ calibrationReady: true });
           this.redrawCalibration();
         };
         img.onerror = () => {
           wx.showToast({ title: '图片加载失败', icon: 'none' });
         };
+        img.src = this.data.imagePath;
       });
   },
 
-  // 自动检测比例尺 - 使用图像默认位置+手动调整
+  // 自动检测比例尺 - 使用估算+用户调整
   autoDetectRuler() {
     if (this.data.isDetecting) return;
-    if (!this.canvasData) {
+
+    // 检查画布是否准备好
+    if (!this.canvasData || !this.data.calibrationReady) {
       wx.showToast({ title: '请稍候，图片加载中...', icon: 'none' });
       return;
     }
@@ -120,36 +127,29 @@ Page({
     this.setData({ isDetecting: true, detectionStep: '分析图像...' });
 
     setTimeout(() => {
+      // 再次检查
+      if (!this.canvasData) {
+        wx.showToast({ title: '请稍候再试', icon: 'none' });
+        this.setData({ isDetecting: false, detectionStep: '' });
+        return;
+      }
+
       try {
-        const { drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.canvasData;
-        const canvasW = this.data.calibrationCanvasW;
-        const canvasH = this.data.calibrationCanvasH;
+        const { drawW, drawH, origOffsetX, origOffsetY } = this.canvasData;
 
-        if (!img || !drawW || !drawH) {
-          wx.showToast({ title: '请稍候再试', icon: 'none' });
-          this.setData({ isDetecting: false, detectionStep: '' });
-          return;
-        }
-
-        // 基于图像尺寸估算比例尺位置（通常在图像中心区域）
-        // 假设比例尺在图像宽度约30-50%位置
-        const imgCenterX = drawW / 2;
-        const imgCenterY = drawH / 2;
-
-        // 估算0mm和10mm的位置（假设比例尺宽度约image width的15%）
-        const rulerWidth = drawW * 0.15;
+        // 基于图像中心估算比例尺位置
+        const rulerWidth = drawW * 0.12;
         const p0 = {
-          x: imgCenterX - rulerWidth / 2 + origOffsetX,
-          y: imgCenterY + origOffsetY
+          x: (drawW - rulerWidth) / 2 + origOffsetX,
+          y: drawH * 0.6 + origOffsetY
         };
         const p10 = {
-          x: imgCenterX + rulerWidth / 2 + origOffsetX,
-          y: imgCenterY + origOffsetY
+          x: (drawW + rulerWidth) / 2 + origOffsetX,
+          y: drawH * 0.6 + origOffsetY
         };
 
         const pxPerMm = (p10.x - p0.x) / 10;
 
-        // 不验证具体数值，直接使用，让用户调整
         this.setData({
           rulerPoint1: p0,
           rulerPoint2: p10,
@@ -166,7 +166,7 @@ Page({
         wx.showToast({ title: '识别出错，请手动', icon: 'none' });
         this.setData({ isDetecting: false, detectionStep: '' });
       }
-    }, 200);
+    }, 300);
   },
 
   zoomInCalibration() {
