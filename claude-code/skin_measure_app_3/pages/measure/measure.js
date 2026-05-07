@@ -114,59 +114,44 @@ Page({
       });
   },
 
-  // 自动检测比例尺 - 使用估算+用户调整
+  // 自动检测比例尺 - 直接设置默认位置让用户调整
   autoDetectRuler() {
     if (this.data.isDetecting) return;
 
     // 检查画布是否准备好
     if (!this.canvasData || !this.data.calibrationReady) {
-      wx.showToast({ title: '请稍候，图片加载中...', icon: 'none' });
+      wx.showToast({ title: '请先确认图片', icon: 'none' });
       return;
     }
 
-    this.setData({ isDetecting: true, detectionStep: '分析图像...' });
+    try {
+      const { drawW, drawH, origOffsetX, origOffsetY } = this.canvasData;
 
-    setTimeout(() => {
-      // 再次检查
-      if (!this.canvasData) {
-        wx.showToast({ title: '请稍候再试', icon: 'none' });
-        this.setData({ isDetecting: false, detectionStep: '' });
-        return;
-      }
+      // 设置默认位置（图像中心），让用户拖动调整
+      const rulerWidth = drawW * 0.15;
+      const centerX = drawW / 2 + origOffsetX;
+      const centerY = drawH * 0.6 + origOffsetY;
 
-      try {
-        const { drawW, drawH, origOffsetX, origOffsetY } = this.canvasData;
+      const p0 = { x: centerX - rulerWidth / 2, y: centerY };
+      const p10 = { x: centerX + rulerWidth / 2, y: centerY };
+      const pxPerMm = (p10.x - p0.x) / 10;
 
-        // 基于图像中心估算比例尺位置
-        const rulerWidth = drawW * 0.12;
-        const p0 = {
-          x: (drawW - rulerWidth) / 2 + origOffsetX,
-          y: drawH * 0.6 + origOffsetY
-        };
-        const p10 = {
-          x: (drawW + rulerWidth) / 2 + origOffsetX,
-          y: drawH * 0.6 + origOffsetY
-        };
-
-        const pxPerMm = (p10.x - p0.x) / 10;
-
-        this.setData({
-          rulerPoint1: p0,
-          rulerPoint2: p10,
-          pxPerMm,
-          mmPerPxStr: (1 / pxPerMm).toFixed(4),
-          calibrationDone: true,
-          isDetecting: false,
-          detectionStep: ''
-        });
-        this.redrawCalibration();
-        wx.showToast({ title: '已标记，请拖动调整', icon: 'none' });
-      } catch (e) {
-        console.error('Error:', e);
-        wx.showToast({ title: '识别出错，请手动', icon: 'none' });
-        this.setData({ isDetecting: false, detectionStep: '' });
-      }
-    }, 300);
+      this.setData({
+        rulerPoint1: p0,
+        rulerPoint2: p10,
+        pxPerMm,
+        mmPerPxStr: (1 / pxPerMm).toFixed(4),
+        calibrationDone: true,
+        isDetecting: false,
+        detectionStep: ''
+      });
+      this.redrawCalibration();
+      wx.showToast({ title: '已标记，请拖动调整', icon: 'none' });
+    } catch (e) {
+      console.error('Error:', e);
+      wx.showToast({ title: '请手动标定', icon: 'none' });
+      this.setData({ isDetecting: false, detectionStep: '' });
+    }
   },
 
   zoomInCalibration() {
