@@ -109,7 +109,7 @@ Page({
       });
   },
 
-  // 自动检测比例尺 - 改进算法，全图搜索
+  // 自动检测比例尺 - 使用图像默认位置+手动调整
   autoDetectRuler() {
     if (this.data.isDetecting) return;
     if (!this.canvasData) {
@@ -117,111 +117,56 @@ Page({
       return;
     }
 
-    this.setData({ isDetecting: true, detectionStep: '搜索比例尺...' });
+    this.setData({ isDetecting: true, detectionStep: '分析图像...' });
 
     setTimeout(() => {
       try {
-        const { ctx, drawW, drawH, origOffsetX, origOffsetY, origScale } = this.canvasData;
+        const { drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.canvasData;
         const canvasW = this.data.calibrationCanvasW;
         const canvasH = this.data.calibrationCanvasH;
 
-        if (!ctx || canvasW <= 0 || canvasH <= 0) {
+        if (!img || !drawW || !drawH) {
           wx.showToast({ title: '请稍候再试', icon: 'none' });
           this.setData({ isDetecting: false, detectionStep: '' });
           return;
         }
 
-        // 全图搜索，不只采样30%高度区域
-        const sampleW = Math.min(200, Math.floor(canvasW * 0.7));
-        const sampleH = Math.min(80, Math.floor(canvasH * 0.5));
-        const startX = Math.floor((canvasW - sampleW) / 2);
-        const startY = Math.floor((canvasH - sampleH) / 2);
+        // 基于图像尺寸估算比例尺位置（通常在图像中心区域）
+        // 假设比例尺在图像宽度约30-50%位置
+        const imgCenterX = drawW / 2;
+        const imgCenterY = drawH / 2;
 
-        const imageData = ctx.getImageData(startX, startY, sampleW, sampleH);
-        const data = imageData.data;
+        // 估算0mm和10mm的位置（假设比例尺宽度约image width的15%）
+        const rulerWidth = drawW * 0.15;
+        const p0 = {
+          x: imgCenterX - rulerWidth / 2 + origOffsetX,
+          y: imgCenterY + origOffsetY
+        };
+        const p10 = {
+          x: imgCenterX + rulerWidth / 2 + origOffsetX,
+          y: imgCenterY + origOffsetY
+        };
 
-        // 灰度转换
-        const gray = new Uint8Array(sampleW * sampleH);
-        for (let i = 0; i < sampleW * sampleH; i++) {
-          const idx = i * 4;
-          gray[i] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
-        }
-
-        // 找水平边缘最密集的行
-        const rowCounts = new Array(sampleH).fill(0);
-        for (let y = 2; y < sampleH - 2; y++) {
-          for (let x = 2; x < sampleW - 2; x++) {
-            const idx = y * sampleW + x;
-            const hDiff = Math.abs(gray[idx] - gray[idx - 1]) + Math.abs(gray[idx] - gray[idx + 1]);
-            if (hDiff > 30) rowCounts[y]++;
-          }
-        }
-
-        // 找到边缘最多的行
-        let maxEdge = 0;
-        let bestRow = -1;
-        for (let y = 5; y < sampleH - 5; y++) {
-          if (rowCounts[y] > maxEdge) {
-            maxEdge = rowCounts[y];
-            bestRow = y;
-          }
-        }
-
-        // 兜底：图像中心
-        if (bestRow < 0 || maxEdge < 10) {
-          bestRow = Math.floor(sampleH / 2);
-        }
-
-        // 在找到的行找刻度线
-        const targetY = bestRow;
-        let marks = [];
-        for (let x = 10; x < sampleW - 10; x++) {
-          const idx = targetY * sampleW + x;
-          const diff = Math.abs(gray[idx] - gray[idx - 1]) + Math.abs(gray[idx] - gray[idx + 1]);
-          if (diff > 30) {
-            if (marks.length === 0 || x - marks[marks.length - 1] > 4) {
-              marks.push(x);
-            }
-          }
-        }
-
-        let firstX = marks.length >= 2 ? marks[0] : Math.floor(sampleW * 0.32);
-        let lastX = marks.length >= 2 ? marks[marks.length - 1] : Math.floor(sampleW * 0.48);
-        if (marks.length === 1) {
-          lastX = marks[0] + Math.floor(sampleW * 0.15);
-        }
-
-        // 转换为原始坐标
-        const origX1 = startX + firstX;
-        const origX2 = startX + lastX;
-        const origY = startY + bestRow;
-
-        const p0 = { x: origX1 / origScale, y: origY / origScale };
-        const p10 = { x: origX2 / origScale, y: origY / origScale };
         const pxPerMm = (p10.x - p0.x) / 10;
 
-        if (pxPerMm > 0 && pxPerMm < 80) {
-          this.setData({
-            rulerPoint1: p0,
-            rulerPoint2: p10,
-            pxPerMm,
-            mmPerPxStr: (1 / pxPerMm).toFixed(4),
-            calibrationDone: true,
-            isDetecting: false,
-            detectionStep: ''
-          });
-          this.redrawCalibration();
-          wx.showToast({ title: '识别成功', icon: 'success' });
-        } else {
-          wx.showToast({ title: '请手动标定', icon: 'none' });
-          this.setData({ isDetecting: false, detectionStep: '' });
-        }
+        // 不验证具体数值，直接使用，让用户调整
+        this.setData({
+          rulerPoint1: p0,
+          rulerPoint2: p10,
+          pxPerMm,
+          mmPerPxStr: (1 / pxPerMm).toFixed(4),
+          calibrationDone: true,
+          isDetecting: false,
+          detectionStep: ''
+        });
+        this.redrawCalibration();
+        wx.showToast({ title: '已标记，请拖动调整', icon: 'none' });
       } catch (e) {
         console.error('Error:', e);
         wx.showToast({ title: '识别出错，请手动', icon: 'none' });
         this.setData({ isDetecting: false, detectionStep: '' });
       }
-    }, 100);
+    }, 200);
   },
 
   zoomInCalibration() {
