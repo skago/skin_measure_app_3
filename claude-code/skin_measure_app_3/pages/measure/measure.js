@@ -112,6 +112,10 @@ Page({
   // 自动检测比例尺 - 改进算法，全图搜索
   autoDetectRuler() {
     if (this.data.isDetecting) return;
+    if (!this.canvasData) {
+      wx.showToast({ title: '请稍候，图片加载中...', icon: 'none' });
+      return;
+    }
 
     this.setData({ isDetecting: true, detectionStep: '搜索比例尺...' });
 
@@ -120,6 +124,12 @@ Page({
         const { ctx, drawW, drawH, origOffsetX, origOffsetY, origScale } = this.canvasData;
         const canvasW = this.data.calibrationCanvasW;
         const canvasH = this.data.calibrationCanvasH;
+
+        if (!ctx || canvasW <= 0 || canvasH <= 0) {
+          wx.showToast({ title: '请稍候再试', icon: 'none' });
+          this.setData({ isDetecting: false, detectionStep: '' });
+          return;
+        }
 
         // 全图搜索，不只采样30%高度区域
         const sampleW = Math.min(200, Math.floor(canvasW * 0.7));
