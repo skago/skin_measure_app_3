@@ -109,11 +109,11 @@ Page({
       });
   },
 
-  // 快速自动检测比例尺 - 简化算法
+  // 自动检测比例尺 - 改进算法，全图搜索
   autoDetectRuler() {
     if (this.data.isDetecting) return;
 
-    this.setData({ isDetecting: true, detectionStep: '分析中...' });
+    this.setData({ isDetecting: true, detectionStep: '搜索比例尺...' });
 
     setTimeout(() => {
       try {
@@ -121,69 +121,76 @@ Page({
         const canvasW = this.data.calibrationCanvasW;
         const canvasH = this.data.calibrationCanvasH;
 
-        // 直接在当前画布上采样
-        const sampleW = 100;
-        const sampleH = 40;
-        const imageData = ctx.getImageData(
-          Math.floor(origOffsetX),
-          Math.floor(canvasH * 0.3),
-          sampleW,
-          sampleH
-        );
+        // 全图搜索，不只采样30%高度区域
+        const sampleW = Math.min(200, Math.floor(canvasW * 0.7));
+        const sampleH = Math.min(80, Math.floor(canvasH * 0.5));
+        const startX = Math.floor((canvasW - sampleW) / 2);
+        const startY = Math.floor((canvasH - sampleH) / 2);
+
+        const imageData = ctx.getImageData(startX, startY, sampleW, sampleH);
         const data = imageData.data;
 
         // 灰度转换
-        const gray = new Uint8Array(sampleW);
-        for (let x = 0; x < sampleW; x++) {
-          const idx = x * 4;
-          gray[x] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
+        const gray = new Uint8Array(sampleW * sampleH);
+        for (let i = 0; i < sampleW * sampleH; i++) {
+          const idx = i * 4;
+          gray[i] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
         }
 
-        // 找边缘最密集的行
+        // 找水平边缘最密集的行
+        const rowCounts = new Array(sampleH).fill(0);
+        for (let y = 2; y < sampleH - 2; y++) {
+          for (let x = 2; x < sampleW - 2; x++) {
+            const idx = y * sampleW + x;
+            const hDiff = Math.abs(gray[idx] - gray[idx - 1]) + Math.abs(gray[idx] - gray[idx + 1]);
+            if (hDiff > 30) rowCounts[y]++;
+          }
+        }
+
+        // 找到边缘最多的行
         let maxEdge = 0;
         let bestRow = -1;
-        for (let y = 0; y < sampleH; y++) {
-          let edgeCount = 0;
-          for (let x = 1; x < sampleW - 1; x++) {
-            const idx = y * sampleW + x;
-            if (Math.abs(gray[x] - gray[x - 1]) > 25) edgeCount++;
-          }
-          if (edgeCount > maxEdge) {
-            maxEdge = edgeCount;
+        for (let y = 5; y < sampleH - 5; y++) {
+          if (rowCounts[y] > maxEdge) {
+            maxEdge = rowCounts[y];
             bestRow = y;
           }
         }
 
-        if (bestRow < 0 || maxEdge < 15) {
-          wx.showToast({ title: '未检测到比例尺，请手动', icon: 'none' });
-          this.setData({ isDetecting: false, detectionStep: '' });
-          return;
+        // 兜底：图像中心
+        if (bestRow < 0 || maxEdge < 10) {
+          bestRow = Math.floor(sampleH / 2);
         }
 
-        // 在找到的行附近找刻度线
-        const rowData = gray;
-        let transitions = [];
-        for (let x = 1; x < sampleW - 1; x++) {
-          if (Math.abs(rowData[x] - rowData[x - 1]) > 30) {
-            transitions.push(x);
+        // 在找到的行找刻度线
+        const targetY = bestRow;
+        let marks = [];
+        for (let x = 10; x < sampleW - 10; x++) {
+          const idx = targetY * sampleW + x;
+          const diff = Math.abs(gray[idx] - gray[idx - 1]) + Math.abs(gray[idx] - gray[idx + 1]);
+          if (diff > 30) {
+            if (marks.length === 0 || x - marks[marks.length - 1] > 4) {
+              marks.push(x);
+            }
           }
         }
 
-        let firstX = sampleW * 0.25;
-        let lastX = sampleW * 0.35;
-
-        if (transitions.length >= 2) {
-          firstX = transitions[0];
-          lastX = transitions[transitions.length - 1];
+        let firstX = marks.length >= 2 ? marks[0] : Math.floor(sampleW * 0.32);
+        let lastX = marks.length >= 2 ? marks[marks.length - 1] : Math.floor(sampleW * 0.48);
+        if (marks.length === 1) {
+          lastX = marks[0] + Math.floor(sampleW * 0.15);
         }
 
         // 转换为原始坐标
-        const canvasY = canvasH * 0.3 + bestRow;
-        const p0 = { x: (firstX - origOffsetX) / origScale, y: (canvasY - origOffsetY) / origScale };
-        const p10 = { x: (lastX - origOffsetX) / origScale, y: (canvasY - origOffsetY) / origScale };
+        const origX1 = startX + firstX;
+        const origX2 = startX + lastX;
+        const origY = startY + bestRow;
+
+        const p0 = { x: origX1 / origScale, y: origY / origScale };
+        const p10 = { x: origX2 / origScale, y: origY / origScale };
         const pxPerMm = (p10.x - p0.x) / 10;
 
-        if (pxPerMm > 0 && pxPerMm < 50) { // 合理范围
+        if (pxPerMm > 0 && pxPerMm < 80) {
           this.setData({
             rulerPoint1: p0,
             rulerPoint2: p10,
@@ -204,7 +211,7 @@ Page({
         wx.showToast({ title: '识别出错，请手动', icon: 'none' });
         this.setData({ isDetecting: false, detectionStep: '' });
       }
-    }, 50);
+    }, 100);
   },
 
   zoomInCalibration() {
