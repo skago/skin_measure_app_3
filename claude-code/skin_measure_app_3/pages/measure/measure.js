@@ -336,14 +336,14 @@ Page({
       const p1 = this.data.rulerPoint1;
       const screenX = offsetX + p1.x * origScale * scale;
       const screenY = offsetY + p1.y * origScale * scale;
-      this.drawPoint(ctx, screenX, screenY, '0mm', this.data.editingPoint?.type === 'ruler1');
+      this.drawPoint(ctx, screenX, screenY, '0mm', !!(this.data.editingPoint && this.data.editingPoint.type === 'ruler1'));
     }
 
     if (this.data.rulerPoint2) {
       const p2 = this.data.rulerPoint2;
       const screenX = offsetX + p2.x * origScale * scale;
       const screenY = offsetY + p2.y * origScale * scale;
-      this.drawPoint(ctx, screenX, screenY, '10mm', this.data.editingPoint?.type === 'ruler2');
+      this.drawPoint(ctx, screenX, screenY, '10mm', !!(this.data.editingPoint && this.data.editingPoint.type === 'ruler2'));
     }
 
     if (this.data.rulerPoint1 && this.data.rulerPoint2) {
@@ -686,7 +686,7 @@ Page({
     vertices.forEach((v, i) => {
       const screenX = offsetX + v.x * origScale * scale;
       const screenY = offsetY + v.y * origScale * scale;
-      const isEditing = this.data.editingPoint?.type === 'vertex' && this.data.editingPoint?.index === i;
+      const isEditing = this.data.editingPoint && this.data.editingPoint.type === 'vertex' && this.data.editingPoint.index === i;
       ctx.fillStyle = '#3b82f6';
       ctx.beginPath();
       ctx.arc(screenX, screenY, isEditing ? 14 : 10, 0, Math.PI * 2);
