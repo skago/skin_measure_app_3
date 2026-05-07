@@ -115,20 +115,20 @@ Page({
       });
   },
 
-  // 自动检测比例尺 - 直接设置默认位置让用户调整
+  // 自动检测比例尺 - 最简方案，直接设置标记点
   autoDetectRuler() {
-    if (this.data.isDetecting) return;
-
-    // 检查画布是否准备好
-    if (!this.canvasData || !this.data.calibrationReady) {
-      wx.showToast({ title: '请先确认图片', icon: 'none' });
-      return;
-    }
-
+    // 直接设置默认标记点，使用try-catch完全包裹
     try {
-      const { drawW, drawH, origOffsetX, origOffsetY } = this.canvasData;
+      if (!this.canvasData) {
+        wx.showToast({
+          title: '请先确认图片',
+          icon: 'none',
+          duration: 1500
+        });
+        return;
+      }
 
-      // 设置默认位置（图像中心），让用户拖动调整
+      const { drawW, drawH, origOffsetX, origOffsetY } = this.canvasData;
       const rulerWidth = drawW * 0.15;
       const centerX = drawW / 2 + origOffsetX;
       const centerY = drawH * 0.6 + origOffsetY;
@@ -140,18 +140,28 @@ Page({
       this.setData({
         rulerPoint1: p0,
         rulerPoint2: p10,
-        pxPerMm,
+        pxPerMm: pxPerMm,
         mmPerPxStr: (1 / pxPerMm).toFixed(4),
-        calibrationDone: true,
-        isDetecting: false,
-        detectionStep: ''
+        calibrationDone: true
       });
-      this.redrawCalibration();
-      wx.showToast({ title: '已标记，请拖动调整', icon: 'none' });
+
+      // 延迟执行redraw确保setData完成后调用
+      setTimeout(() => {
+        this.redrawCalibration();
+      }, 0);
+
+      wx.showToast({
+        title: '已标记，请拖动调整',
+        icon: 'none',
+        duration: 1500
+      });
     } catch (e) {
-      console.error('Error:', e);
-      wx.showToast({ title: '请手动标定', icon: 'none' });
-      this.setData({ isDetecting: false, detectionStep: '' });
+      console.error('autoDetectRuler error:', e);
+      wx.showToast({
+        title: '请手动标定',
+        icon: 'none',
+        duration: 1500
+      });
     }
   },
 
