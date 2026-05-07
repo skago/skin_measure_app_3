@@ -118,54 +118,40 @@ try {
       });
   },
 
-  // 自动检测比例尺 - 最简方案，直接设置标记点
+  // 自动检测比例尺 - 极简测试版
   autoDetectRuler() {
-    // 直接设置默认标记点，使用try-catch完全包裹
-    try {
-      if (!this.canvasData) {
-        wx.showToast({
-          title: '请先确认图片',
-          icon: 'none',
-          duration: 1500
-        });
-        return;
-      }
+    console.log('autoDetectRuler called, canvasData exists:', !!this.canvasData);
 
-      const { drawW, drawH, origOffsetX, origOffsetY } = this.canvasData;
-      const rulerWidth = drawW * 0.15;
-      const centerX = drawW / 2 + origOffsetX;
-      const centerY = drawH * 0.6 + origOffsetY;
-
-      const p0 = { x: centerX - rulerWidth / 2, y: centerY };
-      const p10 = { x: centerX + rulerWidth / 2, y: centerY };
-      const pxPerMm = (p10.x - p0.x) / 10;
-
-      this.setData({
-        rulerPoint1: p0,
-        rulerPoint2: p10,
-        pxPerMm: pxPerMm,
-        mmPerPxStr: (1 / pxPerMm).toFixed(4),
-        calibrationDone: true
-      });
-
-      // 延迟执行redraw确保setData完成后调用
-      setTimeout(() => {
-        this.redrawCalibration();
-      }, 0);
-
-      wx.showToast({
-        title: '已标记，请拖动调整',
-        icon: 'none',
-        duration: 1500
-      });
-    } catch (e) {
-      console.error('autoDetectRuler error:', e);
-      wx.showToast({
-        title: '请手动标定',
-        icon: 'none',
-        duration: 1500
-      });
+    if (!this.canvasData) {
+      wx.showToast({ title: '请先确认图片', icon: 'none' });
+      return;
     }
+
+    const { drawW, drawH, origOffsetX, origOffsetY } = this.canvasData;
+    console.log('drawW:', drawW, 'drawH:', drawH);
+
+    const rulerWidth = drawW * 0.15;
+    const centerX = drawW / 2 + origOffsetX;
+    const centerY = drawH * 0.6 + origOffsetY;
+
+    const p0 = { x: centerX - rulerWidth / 2, y: centerY };
+    const p10 = { x: centerX + rulerWidth / 2, y: centerY };
+    const pxPerMm = (p10.x - p0.x) / 10;
+
+    console.log('pxPerMm:', pxPerMm);
+
+    this.setData({
+      rulerPoint1: p0,
+      rulerPoint2: p10,
+      pxPerMm: pxPerMm,
+      mmPerPxStr: (1 / pxPerMm).toFixed(4),
+      calibrationDone: true
+    });
+
+    console.log('setData done, calling redrawCalibration');
+
+    this.redrawCalibration();
+    wx.showToast({ title: '已标记，请拖动调整', icon: 'none' });
   },
 
   zoomInCalibration() {
