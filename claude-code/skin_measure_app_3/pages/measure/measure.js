@@ -401,6 +401,10 @@ try {
 
   onCalibrationTap(e) {
     if (this.data.calibrationDone) return;
+    if (!this.canvasData) {
+      wx.showToast({ title: '请稍候', icon: 'none' });
+      return;
+    }
     const { x, y } = e.detail;
     const { offsetX, offsetY, scale } = this.currentDraw || { offsetX: 0, offsetY: 0, scale: 1 };
     const { origScale } = this.canvasData;
@@ -504,12 +508,16 @@ try {
   // 快速自动检测病变轮廓
   autoDetectContour() {
     if (this.data.isDetecting) return;
+    if (!this.polyData) {
+      wx.showToast({ title: '请先进入下一步', icon: 'none' });
+      return;
+    }
 
     this.setData({ isDetecting: true, detectionStep: '检测中...' });
 
     setTimeout(() => {
       try {
-        const { ctx, drawW, drawH, origOffsetX, origOffsetY, origScale } = this.polyData;
+        const { drawW, drawH, origOffsetX, origOffsetY, origScale } = this.polyData;
         const canvasW = this.data.polygonCanvasW;
         const canvasH = this.data.polygonCanvasH;
 
@@ -713,6 +721,10 @@ try {
 
   onPolygonTap(e) {
     if (this.data.editingPoint) return;
+    if (!this.polyData) {
+      wx.showToast({ title: '请稍候', icon: 'none' });
+      return;
+    }
     const { x, y } = e.detail;
     const { offsetX, offsetY, scale } = this.currentPolyDraw || { offsetX: 0, offsetY: 0, scale: 1 };
     const { origScale } = this.polyData;
