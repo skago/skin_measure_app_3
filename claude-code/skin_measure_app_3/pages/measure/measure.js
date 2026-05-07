@@ -1,5 +1,6 @@
 console.log('measure page before Page');
 try {
+  console.log('measure: defining Page...');
   Page({
     data: {
     step: 1,
@@ -283,7 +284,12 @@ try {
 
   dragPoint(dx, dy, type) {
     const dataKey = type === 'calibration' ? 'calibrationScale' : 'polygonScale';
-    const origScale = type === 'calibration' ? this.canvasData.origScale : this.polyData.origScale;
+    // 添加安全检查
+    if (type === 'calibration' && !this.canvasData) return;
+    if (type === 'polygon' && !this.polyData) return;
+
+    const canvasData = type === 'calibration' ? this.canvasData : this.polyData;
+    const origScale = canvasData ? canvasData.origScale : 1;
     const scale = this.data[dataKey];
     const imgDx = dx / (scale * origScale);
     const imgDy = dy / (scale * origScale);
