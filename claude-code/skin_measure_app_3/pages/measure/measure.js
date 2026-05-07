@@ -109,33 +109,103 @@ Page({
       });
   },
 
-  // 快速自动检测比例尺 - 使用简化算法
+  // 快速自动检测比例尺 - 简化算法
   autoDetectRuler() {
     if (this.data.isDetecting) return;
 
     this.setData({ isDetecting: true, detectionStep: '分析中...' });
 
-    // 使用 setTimeout 让 UI 先更新
     setTimeout(() => {
       try {
-        const { canvas, ctx, dpr, drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.canvasData;
+        const { ctx, drawW, drawH, origOffsetX, origOffsetY, origScale } = this.canvasData;
         const canvasW = this.data.calibrationCanvasW;
         const canvasH = this.data.calibrationCanvasH;
 
-        // 创建临时 canvas 进行缩小处理
-        const tempCanvas = document.createElement('canvas');
-        const scale = 0.2; // 降采样到 20%
-        const tempW = Math.floor(canvasW * scale);
-        const tempH = Math.floor(canvasH * scale);
-        tempCanvas.width = tempW;
-        tempCanvas.height = tempH;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(img, origOffsetX, origOffsetY, drawW * origScale, drawH * origScale, 0, 0, tempW, tempH);
-
-        const imageData = tempCtx.getImageData(0, 0, tempW, tempH);
+        // 直接在当前画布上采样
+        const sampleW = 100;
+        const sampleH = 40;
+        const imageData = ctx.getImageData(
+          Math.floor(origOffsetX),
+          Math.floor(canvasH * 0.3),
+          sampleW,
+          sampleH
+        );
         const data = imageData.data;
 
-        // 快速灰度 + 边缘检测
+        // 灰度转换
+        const gray = new Uint8Array(sampleW);
+        for (let x = 0; x < sampleW; x++) {
+          const idx = x * 4;
+          gray[x] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
+        }
+
+        // 找边缘最密集的行
+        let maxEdge = 0;
+        let bestRow = -1;
+        for (let y = 0; y < sampleH; y++) {
+          let edgeCount = 0;
+          for (let x = 1; x < sampleW - 1; x++) {
+            const idx = y * sampleW + x;
+            if (Math.abs(gray[x] - gray[x - 1]) > 25) edgeCount++;
+          }
+          if (edgeCount > maxEdge) {
+            maxEdge = edgeCount;
+            bestRow = y;
+          }
+        }
+
+        if (bestRow < 0 || maxEdge < 15) {
+          wx.showToast({ title: '未检测到比例尺，请手动', icon: 'none' });
+          this.setData({ isDetecting: false, detectionStep: '' });
+          return;
+        }
+
+        // 在找到的行附近找刻度线
+        const rowData = gray;
+        let transitions = [];
+        for (let x = 1; x < sampleW - 1; x++) {
+          if (Math.abs(rowData[x] - rowData[x - 1]) > 30) {
+            transitions.push(x);
+          }
+        }
+
+        let firstX = sampleW * 0.25;
+        let lastX = sampleW * 0.35;
+
+        if (transitions.length >= 2) {
+          firstX = transitions[0];
+          lastX = transitions[transitions.length - 1];
+        }
+
+        // 转换为原始坐标
+        const canvasY = canvasH * 0.3 + bestRow;
+        const p0 = { x: (firstX - origOffsetX) / origScale, y: (canvasY - origOffsetY) / origScale };
+        const p10 = { x: (lastX - origOffsetX) / origScale, y: (canvasY - origOffsetY) / origScale };
+        const pxPerMm = (p10.x - p0.x) / 10;
+
+        if (pxPerMm > 0 && pxPerMm < 50) { // 合理范围
+          this.setData({
+            rulerPoint1: p0,
+            rulerPoint2: p10,
+            pxPerMm,
+            mmPerPxStr: (1 / pxPerMm).toFixed(4),
+            calibrationDone: true,
+            isDetecting: false,
+            detectionStep: ''
+          });
+          this.redrawCalibration();
+          wx.showToast({ title: '识别成功', icon: 'success' });
+        } else {
+          wx.showToast({ title: '请手动标定', icon: 'none' });
+          this.setData({ isDetecting: false, detectionStep: '' });
+        }
+      } catch (e) {
+        console.error('Error:', e);
+        wx.showToast({ title: '识别出错，请手动', icon: 'none' });
+        this.setData({ isDetecting: false, detectionStep: '' });
+      }
+    }, 50);
+  },
         const gray = new Uint8Array(tempW * tempH);
         for (let i = 0; i < tempW * tempH; i++) {
           const idx = i * 4;
@@ -560,48 +630,77 @@ Page({
 
     setTimeout(() => {
       try {
-        const { canvas, ctx, dpr, drawW, drawH, origOffsetX, origOffsetY, origScale, img } = this.polyData;
+        const { ctx, drawW, drawH, origOffsetX, origOffsetY, origScale } = this.polyData;
         const canvasW = this.data.polygonCanvasW;
         const canvasH = this.data.polygonCanvasH;
 
-        // 降采样处理
-        const scale = 0.15;
-        const tempW = Math.floor(canvasW * scale);
-        const tempH = Math.floor(canvasH * scale);
+        // 直接采样中心区域
+        const sampleW = 80;
+        const sampleH = 80;
+        const startX = Math.floor((canvasW - sampleW) / 2);
+        const startY = Math.floor((canvasH - sampleH) / 2);
 
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = tempW;
-        tempCanvas.height = tempH;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(img, origOffsetX, origOffsetY, drawW * origScale, drawH * origScale, 0, 0, tempW, tempH);
-
-        const imageData = tempCtx.getImageData(0, 0, tempW, tempH);
+        const imageData = ctx.getImageData(startX, startY, sampleW, sampleH);
         const data = imageData.data;
-        const gray = new Uint8Array(tempW * tempH);
+        const gray = new Uint8Array(sampleW * sampleH);
 
-        for (let i = 0; i < tempW * tempH; i++) {
+        for (let i = 0; i < sampleW * sampleH; i++) {
           const idx = i * 4;
           gray[i] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
         }
 
-        // 从中心向外放射状搜索找边缘
-        const centerX = tempW / 2;
-        const centerY = tempH / 2;
+        // 中心向外搜索
+        const centerX = sampleW / 2;
+        const centerY = sampleH / 2;
         const contourPoints = [];
-        const angles = 12; // 采样点数
+        const angles = 12;
 
         for (let i = 0; i < angles; i++) {
           const angle = (i / angles) * Math.PI * 2;
           const dx = Math.cos(angle);
           const dy = Math.sin(angle);
 
-          for (let dist = 10; dist < Math.min(tempW, tempH) / 2 - 10; dist += 3) {
+          for (let dist = 5; dist < Math.min(sampleW, sampleH) / 2 - 5; dist += 3) {
             const x = Math.floor(centerX + dx * dist);
             const y = Math.floor(centerY + dy * dist);
 
-            if (x < 2 || x >= tempW - 2 || y < 2 || y >= tempH - 2) continue;
+            if (x < 2 || x >= sampleW - 2 || y < 2 || y >= sampleH - 2) continue;
 
-            const idx = y * tempW + x;
+            const idx = y * sampleW + x;
+            const leftIdx = y * sampleW + (x - 2);
+            const rightIdx = y * sampleW + (x + 2);
+
+            const diff = Math.abs(gray[idx] - gray[leftIdx]) + Math.abs(gray[idx] - gray[rightIdx]);
+            if (diff > 40) {
+              contourPoints.push({
+                x: ((startX + x) - origOffsetX) / origScale,
+                y: ((startY + y) - origOffsetY) / origScale
+              });
+              break;
+            }
+          }
+        }
+
+        if (contourPoints.length >= 3) {
+          this.setData({
+            vertices: contourPoints,
+            isDetecting: false,
+            detectionStep: ''
+          });
+          this.redrawPolygon();
+          this.updatePreviewArea();
+          wx.showToast({ title: '识别成功', icon: 'success' });
+        } else {
+          wx.showToast({ title: '请手动绘制', icon: 'none' });
+          this.setData({ isDetecting: false, detectionStep: '' });
+        }
+      } catch (e) {
+        console.error('Error:', e);
+        wx.showToast({ title: '识别出错', icon: 'none' });
+        this.setData({ isDetecting: false, detectionStep: '' });
+      }
+    }, 50);
+  },
             const leftIdx = y * tempW + (x - 2);
             const rightIdx = y * tempW + (x + 2);
 
