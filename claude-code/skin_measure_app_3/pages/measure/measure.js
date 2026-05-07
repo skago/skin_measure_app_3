@@ -19,6 +19,7 @@ Page({
     calibrationScale: 1,
     calibrationOffsetX: 0,
     calibrationOffsetY: 0,
+    calibrationReady: false,
     polygonScale: 1,
     polygonOffsetX: 0,
     polygonOffsetY: 0,
