@@ -124,9 +124,16 @@
   padding: 20rpx 40rpx;
 }
 
+.detecting-info {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
 .detecting-text {
   font-size: 24rpx;
   color: #667eea;
+  font-weight: 500;
 }
 
 .calibration-info {

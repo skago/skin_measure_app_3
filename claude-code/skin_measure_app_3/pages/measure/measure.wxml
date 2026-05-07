@@ -32,9 +32,12 @@
     </view>
     <view class="auto-detect-row">
       <button class="btn-auto" bindtap="autoDetectRuler" wx:if="{{!calibrationDone && !isDetecting}}">
-        <text>🔍 自动识别比例尺</text>
+        <text>🔍 自动识别</text>
       </button>
-      <text wx:if="{{isDetecting}}" class="detecting-text">{{detectionProgress}}</text>
+      <view wx:if="{{isDetecting}}" class="detecting-info">
+        <text class="detecting-text">{{detectionStep || '识别中...'}}</text>
+      </view>
+      <button wx:if="{{calibrationDone && !isDetecting}}" class="btn-retry" bindtap="resetCalibration" style="margin-left: 20rpx;">重新标定</button>
     </view>
     <view class="calibration-info" wx:if="{{pxPerMm}}">
       <text>换算系数：1px = {{mmPerPxStr}} mm</text>
@@ -64,9 +67,11 @@
     </view>
     <view class="auto-detect-row">
       <button class="btn-auto" bindtap="autoDetectContour" wx:if="{{!isDetecting}}">
-        <text>🔍 自动识别轮廓</text>
+        <text>🔍 自动识别</text>
       </button>
-      <text wx:if="{{isDetecting}}" class="detecting-text">{{detectionProgress}}</text>
+      <view wx:if="{{isDetecting}}" class="detecting-info">
+        <text class="detecting-text">{{detectionStep || '识别中...'}}</text>
+      </view>
     </view>
     <view class="polygon-info">
       <text wx:if="{{vertices.length > 0}}">已选点：{{vertices.length}} 个</text>
