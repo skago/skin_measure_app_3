@@ -1,5 +1,7 @@
-Page({
-  data: {
+console.log('measure page before Page');
+try {
+  Page({
+    data: {
     step: 1,
     imagePath: '',
     imageWidth: 0,
@@ -781,3 +783,7 @@ Page({
     wx.redirectTo({ url: '/pages/measure/measure' });
   }
 });
+} catch(e) {
+  console.error('measure page error:', e);
+}
+console.log('measure page loaded');

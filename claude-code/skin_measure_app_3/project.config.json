@@ -1,7 +1,8 @@
 {
   "description": "皮肤面积测量小程序",
   "packOptions": {
-    "ignore": []
+    "ignore": [],
+    "include": []
   },
   "setting": {
     "urlCheck": false,
@@ -35,11 +36,20 @@
       "disablePlugins": [],
       "outputPath": ""
     },
-    "bundleLocationChange": false
+    "bundleLocationChange": false,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "localPlugins": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true
   },
   "compileType": "miniprogram",
   "libVersion": "2.19.0",
-  "appid": "YOUR_APPID",
+  "appid": "wx477730bb0bc9bd31",
   "projectname": "skin-measure-app",
   "condition": {
     "search": {
@@ -60,5 +70,7 @@
     "miniprogram": {
       "list": []
     }
-  }
+  },
+  "simulatorPluginLibVersion": {},
+  "editorSetting": {}
 }
