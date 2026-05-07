@@ -206,93 +206,6 @@ Page({
       }
     }, 50);
   },
-        const gray = new Uint8Array(tempW * tempH);
-        for (let i = 0; i < tempW * tempH; i++) {
-          const idx = i * 4;
-          gray[i] = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114) | 0;
-        }
-
-        // 查找水平标尺线
-        let maxEdge = 0;
-        let rulerY = -1;
-        const scanStart = Math.floor(tempH * 0.2);
-        const scanEnd = Math.floor(tempH * 0.8);
-
-        for (let y = scanStart; y < scanEnd; y++) {
-          let edgeCount = 0;
-          for (let x = 2; x < tempW - 2; x++) {
-            const diff = Math.abs(gray[y * tempW + x] - gray[y * tempW + x - 2]);
-            if (diff > 25) edgeCount++;
-          }
-          if (edgeCount > maxEdge) {
-            maxEdge = edgeCount;
-            rulerY = y;
-          }
-        }
-
-        if (rulerY < 0 || maxEdge < 30) {
-          wx.showToast({ title: '未检测到比例尺，请手动标定', icon: 'none' });
-          this.setData({ isDetecting: false, detectionStep: '' });
-          return;
-        }
-
-        // 在标尺线附近找刻度
-        let marks = [];
-        for (let x = Math.floor(tempW * 0.2); x < tempW * 0.8; x++) {
-          const diff = Math.abs(gray[rulerY * tempW + x] - gray[rulerY * tempW + x - 2]);
-          if (diff > 30) {
-            if (marks.length === 0 || x - marks[marks.length - 1] > 8) {
-              marks.push(x);
-            }
-          }
-        }
-
-        // 基于图像中常见的标尺分布，猜测位置
-        // 取最左侧和最右侧有边缘的位置
-        let firstMark = marks[0] || Math.floor(tempW * 0.25);
-        let lastMark = marks[marks.length - 1] || Math.floor(tempW * 0.35);
-
-        // 如果只有一个点，则基于标尺常见宽度估算
-        if (marks.length < 2) {
-          firstMark = Math.floor(tempW * 0.25);
-          lastMark = Math.floor(tempW * 0.35);
-        }
-
-        // 转换为原始坐标
-        const p0 = {
-          x: (firstMark / scale - origOffsetX) / origScale,
-          y: (rulerY / scale - origOffsetY) / origScale
-        };
-        const p10 = {
-          x: (lastMark / scale - origOffsetX) / origScale,
-          y: (rulerY / scale - origOffsetY) / origScale
-        };
-
-        const pxPerMm = (p10.x - p0.x) / 10;
-
-        if (pxPerMm > 0) {
-          this.setData({
-            rulerPoint1: p0,
-            rulerPoint2: p10,
-            pxPerMm,
-            mmPerPxStr: (1 / pxPerMm).toFixed(4),
-            calibrationDone: true,
-            isDetecting: false,
-            detectionStep: ''
-          });
-          this.redrawCalibration();
-          wx.showToast({ title: '识别成功', icon: 'success' });
-        } else {
-          wx.showToast({ title: '识别失败，请手动标定', icon: 'none' });
-          this.setData({ isDetecting: false, detectionStep: '' });
-        }
-      } catch (e) {
-        console.error('Detection error:', e);
-        wx.showToast({ title: '识别出错，请手动标定', icon: 'none' });
-        this.setData({ isDetecting: false, detectionStep: '' });
-      }
-    }, 100);
-  },
 
   zoomInCalibration() {
     const newScale = Math.min(this.data.calibrationScale + 0.25, 3);
@@ -700,40 +613,6 @@ Page({
         this.setData({ isDetecting: false, detectionStep: '' });
       }
     }, 50);
-  },
-            const leftIdx = y * tempW + (x - 2);
-            const rightIdx = y * tempW + (x + 2);
-
-            const diff = Math.abs(gray[idx] - gray[leftIdx]) + Math.abs(gray[idx] - gray[rightIdx]);
-            if (diff > 40) {
-              contourPoints.push({
-                x: (x / scale - origOffsetX) / origScale,
-                y: (y / scale - origOffsetY) / origScale
-              });
-              break;
-            }
-          }
-        }
-
-        if (contourPoints.length >= 3) {
-          this.setData({
-            vertices: contourPoints,
-            isDetecting: false,
-            detectionStep: ''
-          });
-          this.redrawPolygon();
-          this.updatePreviewArea();
-          wx.showToast({ title: '识别成功', icon: 'success' });
-        } else {
-          wx.showToast({ title: '未检测到轮廓，请手动绘制', icon: 'none' });
-          this.setData({ isDetecting: false, detectionStep: '' });
-        }
-      } catch (e) {
-        console.error('Contour detection error:', e);
-        wx.showToast({ title: '识别出错', icon: 'none' });
-        this.setData({ isDetecting: false, detectionStep: '' });
-      }
-    }, 100);
   },
 
   zoomInPolygon() {
