@@ -83,13 +83,13 @@
 }
 
 .zoom-btn {
-  width: 64rpx;
-  height: 64rpx;
-  line-height: 60rpx;
+  width: 80rpx;
+  height: 80rpx;
+  line-height: 76rpx;
   text-align: center;
   background: #fff;
   border: 2rpx solid #ddd;
-  border-radius: 8rpx;
+  border-radius: 12rpx;
   font-size: 36rpx;
   color: #333;
 }
@@ -116,7 +116,7 @@
 }
 
 .btn-auto {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #3b82f6;
   color: #fff;
   border: none;
   border-radius: 12rpx;
