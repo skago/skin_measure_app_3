@@ -40,7 +40,7 @@
       <button wx:if="{{calibrationDone && !isDetecting}}" class="btn-retry" bindtap="resetCalibration" style="margin-left: 20rpx;">重新标定</button>
     </view>
     <view class="calibration-info" wx:if="{{pxPerMm}}">
-      <text>换算系数：1px = {{mmPerPxStr}} mm</text>
+      <text>比例尺：10mm = {{Math.round(pxPerMm * 10)}} px</text>
     </view>
     <view class="btn-row">
       <button wx:if="{{calibrationDone}}" class="btn-retry" bindtap="resetCalibration">重新标定</button>

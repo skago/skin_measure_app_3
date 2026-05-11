@@ -23,6 +23,7 @@ try {
     calibrationOffsetX: 0,
     calibrationOffsetY: 0,
     calibrationReady: false,
+    polygonReady: false,
     polygonScale: 1,
     polygonOffsetX: 0,
     polygonOffsetY: 0,
@@ -120,38 +121,76 @@ try {
 
   // 自动检测比例尺 - 极简测试版
   autoDetectRuler() {
-    console.log('autoDetectRuler called, canvasData exists:', !!this.canvasData);
+    console.log('autoDetectRuler called, canvasData exists:', !!this.canvasData, 'calibrationReady:', this.data.calibrationReady);
 
     if (!this.canvasData) {
-      wx.showToast({ title: '请先确认图片', icon: 'none' });
+      wx.showToast({ title: '请稍候，图片加载中...', icon: 'none' });
       return;
     }
 
-    const { drawW, drawH, origOffsetX, origOffsetY } = this.canvasData;
-    console.log('drawW:', drawW, 'drawH:', drawH);
+    if (!this.data.calibrationReady) {
+      wx.showToast({ title: '请稍候，图片加载中...', icon: 'none' });
+      return;
+    }
 
-    const rulerWidth = drawW * 0.15;
-    const centerX = drawW / 2 + origOffsetX;
-    const centerY = drawH * 0.6 + origOffsetY;
+    const { drawW, drawH, origOffsetX, origOffsetY, ctx } = this.canvasData;
+    const canvasW = this.data.calibrationCanvasW;
+    const canvasH = this.data.calibrationCanvasH;
 
-    const p0 = { x: centerX - rulerWidth / 2, y: centerY };
-    const p10 = { x: centerX + rulerWidth / 2, y: centerY };
-    const pxPerMm = (p10.x - p0.x) / 10;
+    try {
+      // 从图像右下区域采样检测比例尺（通常在右下角）
+      const sampleW = Math.floor(drawW * 0.3);
+      const sampleH = Math.floor(drawH * 0.2);
+      const startX = Math.floor(origOffsetX + drawW * 0.65);
+      const startY = Math.floor(origOffsetY + drawH * 0.7);
 
-    console.log('pxPerMm:', pxPerMm);
+      // 获取图像数据进行分析
+      const imageData = ctx.getImageData(startX, startY, sampleW, sampleH);
+      const data = imageData.data;
 
-    this.setData({
-      rulerPoint1: p0,
-      rulerPoint2: p10,
-      pxPerMm: pxPerMm,
-      mmPerPxStr: (1 / pxPerMm).toFixed(4),
-      calibrationDone: true
-    });
+      // 寻找垂直边缘（比例尺刻度）
+      let leftEdge = -1, rightEdge = -1;
 
-    console.log('setData done, calling redrawCalibration');
+      // 在采样区域中间行查找左右边缘
+      const midY = Math.floor(sampleH / 2);
+      for (let x = 0; x < sampleW - 1; x++) {
+        const idx = (midY * sampleW + x) * 4;
+        const nextIdx = (midY * sampleW + x + 1) * 4;
+        const diff = Math.abs(data[idx] - data[nextIdx]) + Math.abs(data[idx + 1] - data[nextIdx + 1]) + Math.abs(data[idx + 2] - data[nextIdx + 2]);
 
-    this.redrawCalibration();
-    wx.showToast({ title: '已标记，请拖动调整', icon: 'none' });
+        if (diff > 100 && leftEdge === -1) {
+          leftEdge = x;
+        }
+        if (leftEdge !== -1 && diff < 50 && rightEdge === -1) {
+          rightEdge = x;
+          break;
+        }
+      }
+
+      if (rightEdge > leftEdge + 20) {
+        // 找到有效区域
+        const p0 = { x: startX + leftEdge, y: startY + midY };
+        const p10 = { x: startX + rightEdge, y: startY + midY };
+        const pxPerMm = (p10.x - p0.x) / 10;
+
+        if (pxPerMm > 5 && pxPerMm < 100) {
+          this.setData({
+            rulerPoint1: p0,
+            rulerPoint2: p10,
+            pxPerMm: pxPerMm,
+            calibrationDone: true
+          });
+          this.redrawCalibration();
+          wx.showToast({ title: '已识别比例尺', icon: 'success' });
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('Image analysis failed:', e);
+    }
+
+    // 如果分析失败，使用备选方案：交互式建议用户手动点击
+    wx.showToast({ title: '请手动点击0mm和10mm处', icon: 'none' });
   },
 
   zoomInCalibration() {
@@ -483,6 +522,7 @@ try {
           const offsetX = (canvasW - drawW) / 2;
           const offsetY = (canvasH - drawH) / 2;
           this.polyData = { canvas, ctx, dpr, drawW, drawH, origOffsetX: offsetX, origOffsetY: offsetY, origScale: scale, img };
+          this.setData({ polygonReady: true });
           this.redrawPolygon();
         };
         img.onerror = () => {
@@ -498,12 +538,16 @@ try {
       wx.showToast({ title: '请先进入下一步', icon: 'none' });
       return;
     }
+    if (!this.data.polygonReady) {
+      wx.showToast({ title: '请稍候，图片加载中...', icon: 'none' });
+      return;
+    }
 
     this.setData({ isDetecting: true, detectionStep: '检测中...' });
 
     setTimeout(() => {
       try {
-        const { drawW, drawH, origOffsetX, origOffsetY, origScale } = this.polyData;
+        const { ctx, drawW, drawH, origOffsetX, origOffsetY, origScale } = this.polyData;
         const canvasW = this.data.polygonCanvasW;
         const canvasH = this.data.polygonCanvasH;
 
@@ -711,12 +755,20 @@ try {
       wx.showToast({ title: '请稍候', icon: 'none' });
       return;
     }
+    if (!this.data.polygonReady) {
+      wx.showToast({ title: '请稍候，图片加载中...', icon: 'none' });
+      return;
+    }
     const { x, y } = e.detail;
-    const { offsetX, offsetY, scale } = this.currentPolyDraw || { offsetX: 0, offsetY: 0, scale: 1 };
-    const { origScale } = this.polyData;
+    // 使用 polyData 中的原始偏移量，确保正确转换
+    const scale = this.data.polygonScale;
+    const offsetX = this.polyData.origOffsetX + this.data.polygonOffsetX;
+    const offsetY = this.polyData.origOffsetY + this.data.polygonOffsetY;
+    const origScale = this.polyData.origScale;
 
     const imgX = (x - offsetX) / (origScale * scale);
     const imgY = (y - offsetY) / (origScale * scale);
+    console.log('onPolygonTap:', x, y, '→ img:', imgX, imgY, 'offset:', offsetX, offsetY, 'scale:', origScale * scale);
     const vertices = [...this.data.vertices, { x: imgX, y: imgY }];
     this.setData({ vertices });
     this.redrawPolygon();
