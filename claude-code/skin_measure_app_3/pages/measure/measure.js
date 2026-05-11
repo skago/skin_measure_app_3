@@ -1,6 +1,3 @@
-console.log('measure page before Page');
-try {
-  console.log('measure: defining Page...');
   Page({
     data: {
     step: 1,
@@ -842,4 +839,3 @@ try {
 } catch(e) {
   console.error('measure page error:', e);
 }
-console.log('measure page loaded');
