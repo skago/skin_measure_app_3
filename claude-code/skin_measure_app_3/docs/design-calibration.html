@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=375, initial-scale=1.0">
+  <title>比例尺标定 - 设计方案</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f8f8;
+      padding: 16px;
+      width: 375px;
+      margin: 0 auto;
+    }
+    .page { min-height: 100vh; background: #f8f8f8; padding: 16px; }
+    .step-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+    }
+    .guide-text {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .canvas-wrapper {
+      width: 100%;
+      height: 350px;
+      background: #000;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .zoom-btn {
+      width: 40px;
+      height: 40px;
+      line-height: 38px;
+      text-align: center;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 18px;
+      color: #333;
+    }
+    .zoom-scale {
+      font-size: 14px;
+      color: #666;
+      min-width: 40px;
+      text-align: center;
+    }
+    .btn-auto {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      padding: 10px 20px;
+    }
+    .auto-detect-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .calibration-info {
+      font-size: 13px;
+      color: #3b82f6;
+      margin-bottom: 8px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    .btn-retry {
+      background: #fff;
+      color: #666;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      padding: 10px 20px;
+    }
+    .btn-next {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      padding: 14px;
+      flex: 1;
+    }
+    .marker {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border: 2px solid #ff3b30;
+      border-radius: 50%;
+    }
+    .marker-label {
+      font-size: 11px;
+      color: #ff3b30;
+      font-weight: bold;
+    }
+    .canvas-area {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="step-title">Step 2 / 4：标定比例尺</div>
+    <div class="guide-text">点击比例尺的 0mm 和 10mm 刻度，或使用自动识别</div>
+
+    <div class="canvas-wrapper">
+      <div class="canvas-area">
+        📷 图像预览 + 比例尺标记点
+      </div>
+    </div>
+
+    <div class="zoom-controls">
+      <div class="zoom-btn">−</div>
+      <div class="zoom-scale">100%</div>
+      <div class="zoom-btn">+</div>
+    </div>
+
+    <div class="auto-detect-row">
+      <button class="btn-auto">🔍 自动识别</button>
+    </div>
+
+    <div class="calibration-info">比例尺：10mm = 150 px</div>
+
+    <div class="btn-row">
+      <button class="btn-retry">重新标定</button>
+      <button class="btn-next">确认标定</button>
+    </div>
+  </div>
+</body>
+</html>
